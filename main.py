@@ -453,7 +453,7 @@ def fetch_ical_from_url(url: str) -> str:
     return response.text
 
 def main():
-    parser = argparse.ArgumentParser(description='Find free time windows in calendar')
+    parser = argparse.ArgumentParser(description='Cross-reference multiple calendars to find free time slots')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-f', '--files', nargs='+', help='Path to one or more iCal files')
     group.add_argument('-u', '--urls', nargs='+', help='URLs to fetch iCal data from')

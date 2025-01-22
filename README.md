@@ -8,7 +8,7 @@ Cross-reference multiple calendars to find free time slots.
 
 ### Prerequisites
 
-You'll need at least one local or remote ICS (iCalendar/vCalendar) file.
+You'll need access to at least one local or remote ICS (iCalendar) file.
 
 ### Install
 
@@ -18,23 +18,54 @@ git clone https://github.com/noperator/free-cal
 
 ### Configure
 
+Install dependencies.
+
 ```
 python3 -m venv venv
 source venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
+If you want to use `deploy.sh` (for Cloudflare Pages), fill out `.env`.
+
+```
+CLOUDFLARE_ACCOUNT_ID=<>
+CLOUDFLARE_API_TOKEN=<>
+PROJECT_NAME=<>
+CAL_URLS=(
+    'https://calendar.google.com/calendar/ical/<ACCOUNT>/<CALENDAR>/basic.ics'
+    'https://outlook.office365.com/owa/calendar/<ACCOUNT>/<CALENDAR>/calendar.ics'
+)
+```
+
 ### Usage
 
 ```
-for CAL_URL in \
-    'https://calendar.google.com/calendar/ical/<ACCOUNT>/<CALENDAR>/basic.ics' \
-    'https://outlook.office365.com/owa/calendar/<ACCOUNT>/<CALENDAR>/calendar.ics' \
-    wget -P cal/ "$CAL_URL"
-done
+usage: main.py [-h] (-f FILES [FILES ...] | -u URLS [URLS ...] | -l) [-v] [-t TIMEZONE] [-s START_DATE] [-r] [-c] [--start START] [--end END]
+
+Cross-reference multiple calendars to find free time slots
+
+options:
+  -h, --help            show this help message and exit
+  -f, --files FILES [FILES ...]
+                        Path to one or more iCal files
+  -u, --urls URLS [URLS ...]
+                        URLs to fetch iCal data from
+  -l, --list-timezones  List all available timezones
+  -v, --verbose         Enable verbose debug output
+  -t, --timezone TIMEZONE
+                        Target timezone for output (default: America/New_York)
+  -s, --start-date START_DATE
+                        Start date for free window search (format: YYYY-MM-DD)
+  -r, --strict          Enforce working hours (10 AM - 5 PM) in both Eastern and target timezone
+  -c, --compare         Show times in both local (ET) and target timezone
+  --start START         Work start time in HH:MM format (default: 10:00)
+  --end END             Work end time in HH:MM format (default: 17:00)
 
 source venv/bin/activate
-python3 main.py -f $(ls -t cal/ | head -n 3 | sed 's|^|cal/|')
+python3 main.py -u \
+    'https://calendar.google.com/calendar/ical/<ACCOUNT>/<CALENDAR>/basic.ics' \
+    'https://outlook.office365.com/owa/calendar/<ACCOUNT>/<CALENDAR>/calendar.ics'
 
 Mon 27 Jan @ 10:00 AM – 11:00 AM EST (1h)
 Mon 27 Jan @  4:15 PM –  5:00 PM EST (45m)
@@ -66,3 +97,4 @@ Fri  7 Feb @  1:00 PM –  5:00 PM EST (4h)
 ### To-do
 
 - [ ] document getting calendar links for Outlook, Google
+- [ ] dynamically determine default timezone (vs. hardcoding ET)
