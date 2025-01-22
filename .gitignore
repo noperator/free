@@ -1,3 +1,6 @@
 *.txt
+.DS_Store
+.env
 cal/
+deploy/
 run.sh
