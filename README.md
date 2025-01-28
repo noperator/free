@@ -98,3 +98,5 @@ Fri  7 Feb @  1:00 PM –  5:00 PM EST (4h)
 
 - [ ] document getting calendar links for Outlook, Google
 - [ ] dynamically determine default timezone (vs. hardcoding ET)
+- [ ] min duration as cli opt
+- [ ] min buffer as cli opt
