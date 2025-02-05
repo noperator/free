@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# */5 * * * * /bin/bash -c '/home/noperator/free-cal/deploy.sh &> /home/noperator/free-cal/deploy.log'
+# */5 * * * * /bin/bash -c '/home/noperator/free/deploy.sh &> /home/noperator/free/deploy.log'
 
 export PATH="$(find "$HOME/.nvm/versions/node" -maxdepth 1 -type d | sort -V | tail -n 1)/bin:$PATH"
 

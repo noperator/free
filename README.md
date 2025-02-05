@@ -1,4 +1,4 @@
-# free-cal
+# free
 
 ## Description
 
@@ -13,7 +13,7 @@ You'll need access to at least one local or remote ICS (iCalendar) file.
 ### Install
 
 ```
-git clone https://github.com/noperator/free-cal
+git clone https://github.com/noperator/free
 ```
 
 ### Configure
@@ -100,3 +100,4 @@ Fri  7 Feb @  1:00 PM –  5:00 PM EST (4h)
 - [ ] dynamically determine default timezone (vs. hardcoding ET)
 - [ ] min duration as cli opt
 - [ ] min buffer as cli opt
+- [ ] in web ui, allow specifying local timezone
