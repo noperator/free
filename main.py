@@ -187,6 +187,25 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
                         event_id
                     ))
                     events.append((start, end, event.get('status', 'BUSY')))
+        else:  # Handle all-day events
+            # Convert date to datetime at start of day
+            start = datetime.combine(start, time(0, 0), tzinfo=et_tz)
+            end = datetime.combine(end, time(0, 0), tzinfo=et_tz)
+            
+            # Skip events after cutoff date
+            if start > cutoff_date:
+                continue
+            
+            if start >= search_start and start <= cutoff_date:
+                debug_events.append((
+                    start,
+                    end,
+                    event.get('summary', 'No title'),
+                    event.get('status', 'BUSY'),
+                    'all-day',
+                    event_id
+                ))
+                events.append((start, end, event.get('status', 'BUSY')))
     
     # Before sorting debug_events, add holidays
     if verbose:
