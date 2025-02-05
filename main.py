@@ -15,14 +15,14 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
     events = []
     debug_events = []
     et_tz = ZoneInfo("America/New_York")
-    
+
     # Use provided start_date or default to now
     search_start = start_date if start_date else datetime.now(et_tz)
     cutoff_date = search_start + timedelta(days=31)
-    
+
     # Track moved instances by their UID and original date
     moved_instances = {}
-    
+
     # First pass: collect all moved instances
     for event in cal.walk('vevent'):
         recurrence_id = event.get('recurrence-id')
@@ -39,10 +39,10 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
                 else:
                     original_date = original_date.replace(tzinfo=et_tz)
                 moved_instances[uid].add(original_date)
-    
+
     # Track modified events for table display
     modified_events = []
-    
+
     for event in cal.walk('vevent'):
         # Add debug printing for recurring event modifications
         recurrence_id = event.get('recurrence-id')
@@ -54,7 +54,7 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
                     original_date = original_date.astimezone(et_tz)
                 else:
                     original_date = original_date.replace(tzinfo=et_tz)
-            
+
             # Convert start time to Eastern Time for display
             event_start = event.get('dtstart').dt
             if isinstance(event_start, datetime):
@@ -62,14 +62,14 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
                     event_start = event_start.astimezone(et_tz)
                 else:
                     event_start = event_start.replace(tzinfo=et_tz)
-            
+
             # Store for table display
             modified_events.append((
                 original_date,
                 event_start,
                 event.get('uid')
             ))
-    
+
     for event in cal.walk('vevent'):
         # Add debug printing for recurring event modifications
         recurrence_id = event.get('recurrence-id')
@@ -81,7 +81,7 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
                     original_date = original_date.astimezone(et_tz)
                 else:
                     original_date = original_date.replace(tzinfo=et_tz)
-            
+
             # Convert start time to Eastern Time for display
             event_start = event.get('dtstart').dt
             if isinstance(event_start, datetime):
@@ -89,12 +89,12 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
                     event_start = event_start.astimezone(et_tz)
                 else:
                     event_start = event_start.replace(tzinfo=et_tz)
-            
+
             print(f"Modified occurrence found:", file=sys.stderr)
             print(f"  Original date: {original_date}", file=sys.stderr)
             print(f"  Event ID: {event.get('uid')}", file=sys.stderr)
             print(f"  New time: {event_start}", file=sys.stderr)
-        
+
         # Skip broken events
         if not event.get('dtend'):
             print("[*] no dtend:", event.get('uid'), file=sys.stderr)
@@ -104,15 +104,15 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
         start = event.get('dtstart').dt
         end = event.get('dtend').dt
         event_id = event.get('uid', 'NO-UID')
-        
-        # Convert to datetime if date
+
+        # Handle all-day events (date objects instead of datetime)
         if isinstance(start, datetime):
             # Convert to ET
             if start.tzinfo:
                 start = start.astimezone(et_tz)
             else:
                 start = start.replace(tzinfo=et_tz)
-                
+
             if end.tzinfo:
                 end = end.astimezone(et_tz)
             else:
@@ -121,24 +121,24 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
             # Skip events after cutoff date
             if start > cutoff_date:
                 continue
-                
+
             # Handle recurring events
             if event.get('rrule'):
                 rule = event.get('rrule')
                 if isinstance(rule, dict):
                     # Get the rule string and explicitly set TZID
                     rule_str = event.get('rrule').to_ical().decode('utf-8')
-                    
+
                     # Create a new start time in ET for rrule
                     start_et = start.astimezone(et_tz)
-                    
+
                     # Use dateutil.rrule with explicit timezone handling
                     from dateutil.rrule import rrulestr
                     dates = list(rrulestr(rule_str, dtstart=start_et, forceset=True).between(
                         search_start,
                         cutoff_date
                     ))
-                    
+
                     # Handle exclusions
                     exdates = event.get('exdate')
                     if exdates:
@@ -157,12 +157,12 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
                                             ex_dt = ex_dt.replace(tzinfo=et_tz)
                                         excluded.add(ex_dt)
                         dates = [d for d in dates if d not in excluded]
-                    
+
                     # Filter out any dates that correspond to moved instances
                     uid = event.get('uid')
                     if uid in moved_instances:
                         dates = [d for d in dates if d not in moved_instances[uid]]
-                    
+
                     for d in dates:
                         event_start = d
                         event_end = d + (end - start)
@@ -191,11 +191,11 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
             # Convert date to datetime at start of day
             start = datetime.combine(start, time(0, 0), tzinfo=et_tz)
             end = datetime.combine(end, time(0, 0), tzinfo=et_tz)
-            
+
             # Skip events after cutoff date
             if start > cutoff_date:
                 continue
-            
+
             if start >= search_start and start <= cutoff_date:
                 debug_events.append((
                     start,
@@ -206,14 +206,14 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
                     event_id
                 ))
                 events.append((start, end, event.get('status', 'BUSY')))
-    
+
     # Before sorting debug_events, add holidays
     if verbose:
         et_tz = ZoneInfo("America/New_York")
         now = datetime.now(et_tz)
         end_date = now + timedelta(days=31)
         us_holidays_list = get_us_holidays(now, end_date)
-        
+
         for holiday_date, holiday_name in us_holidays_list:
             # Add full-day holiday events to debug output
             debug_events.append((
@@ -224,10 +224,10 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
                 "holiday",
                 holiday_name  # Show holiday name in ID column
             ))
-    
+
     # Sort by start time first
     debug_events.sort(key=lambda x: x[0])
-    
+
     # Only print debug table if verbose
     if verbose:
         # Print modified events table first if there are any modifications
@@ -235,10 +235,10 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
             print("\nModified Recurring Events:", file=sys.stderr)
             print(f"{'Original Time':<25} {'New Time':<25} {'Event ID'}", file=sys.stderr)
             print("-" * 80, file=sys.stderr)
-            
+
             # Sort by original date
             modified_events.sort(key=lambda x: x[0])
-            
+
             for original, new, event_id in modified_events:
                 print(
                     f"{original.strftime('%Y-%m-%d %H:%M:%S%z'):<25} "
@@ -251,7 +251,7 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
         # Print main appointments table
         print(f"{'Type':<10} {'Start':<25} {'End':<25} {'ID'}", file=sys.stderr)
         print("-" * 80, file=sys.stderr)
-        
+
         # Print events in columns
         for start, end, summary, _, event_type, event_id in debug_events:
             # For holidays, print the summary instead of the ID
@@ -263,14 +263,14 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
                 f"{display_id}",
                 file=sys.stderr
             )
-    
+
     return events
 
 def get_us_holidays(start_date: datetime, end_date: datetime) -> List[Tuple[datetime, str]]:
     """Get list of US federal holidays between start and end date with their names."""
     us_holidays = holidays.US()
     holidays_list = []
-    
+
     current = start_date
     while current <= end_date:
         if current.date() in us_holidays:
@@ -279,7 +279,7 @@ def get_us_holidays(start_date: datetime, end_date: datetime) -> List[Tuple[date
             holiday_name = us_holidays.get(current.date())
             holidays_list.append((holiday, holiday_name))
         current += timedelta(days=1)
-    
+
     return holidays_list
 
 def find_free_windows(events: List[Tuple[datetime, datetime, str]], 
@@ -297,27 +297,27 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
     target_timezone = ZoneInfo(target_tz)
     now = start_date if start_date else datetime.now(et_tz)
     end_date = now + timedelta(days=30)
-    
+
     # Get holidays
     holiday_list = get_us_holidays(now, end_date)
     # Convert holidays to a set of dates for faster lookup
     holiday_dates = {holiday[0].date() for holiday in holiday_list}
-    
+
     # Initialize with working hours for each day
     free_windows = []
     current = (now + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
-    
+
     while current < end_date:
         if current.weekday() < 5:  # Monday-Friday
             if current.date() not in holiday_dates:
                 day_start = current.replace(hour=work_start.hour, minute=work_start.minute)
                 day_end = current.replace(hour=work_end.hour, minute=work_end.minute)
-                
+
                 if strict:
                     # Convert to target timezone to check working hours there
                     target_start = day_start.astimezone(target_timezone)
                     target_end = day_end.astimezone(target_timezone)
-                    
+
                     # Adjust window to respect working hours in both timezones
                     # Start time should be no earlier than 10 AM in either timezone
                     et_start = day_start
@@ -326,7 +326,7 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
                         minute=work_start.minute
                     )
                     effective_start = max(et_start, target_start.astimezone(et_tz))
-                    
+
                     # End time should be no later than 5 PM in either timezone
                     et_end = day_end
                     target_end = target_end.replace(
@@ -334,22 +334,22 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
                         minute=work_end.minute
                     )
                     effective_end = min(et_end, target_end.astimezone(et_tz))
-                    
+
                     # Only add the window if there's actually time available
                     if effective_start < effective_end:
                         free_windows.append((effective_start, effective_end))
                 else:
                     free_windows.append((day_start, day_end))
-                    
+
         current += timedelta(days=1)
-    
+
     # Remove busy times and apply buffer
     busy_times = []
     for start, end, status in events:
         if status != 'FREE':
             buffer = timedelta(minutes=buffer_mins)
             busy_times.append((start - buffer, end + buffer))
-    
+
     # Sort busy times first
     busy_times.sort()
     merged = []
@@ -358,7 +358,7 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
             merged.append(busy)
         else:
             merged[-1] = (merged[-1][0], max(merged[-1][1], busy[1]))
-    
+
     # Remove busy times from free windows
     result = []
     for free_start, free_end in free_windows:
@@ -371,12 +371,12 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
                 current = max(current, busy_end)
         if current < free_end:
             result.append((current, free_end))
-    
+
     # Filter windows shorter than 30 minutes
     min_duration = timedelta(minutes=30)
     filtered_windows = [(start, end) for start, end in result 
                        if end - start >= min_duration]
-    
+
     # Round start times up to next 15-minute boundary
     final_result = []
     for start, end in filtered_windows:
@@ -387,10 +387,10 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
             start = start.replace(hour=start.hour + 1, minute=0)
         else:
             start = start.replace(minute=rounded_minutes)
-            
+
         if start < end and end - start >= min_duration:
             final_result.append((start, end))
-    
+
     return final_result
 
 def format_windows(windows: List[Tuple[datetime, datetime]], target_tz: str = "America/New_York", compare: bool = False) -> List[str]:
@@ -399,31 +399,31 @@ def format_windows(windows: List[Tuple[datetime, datetime]], target_tz: str = "A
     last_week = None
     target_timezone = ZoneInfo(target_tz)
     et_tz = ZoneInfo("America/New_York")
-    
+
     def format_window(s, e, tz_name):
         day_str = str(s.day)
         if len(day_str) == 1:
             day_str = " " + day_str
         date_str = f"{s.strftime('%a')} {day_str} {s.strftime('%b')}"
-        
+
         def format_time(dt):
             hour = dt.strftime("%I").lstrip("0")
             return f"{hour}:{dt.strftime('%M')} {dt.strftime('%p')}"
-        
+
         start_str = format_time(s).rjust(8)
         end_str = format_time(e).rjust(8)
-        
+
         duration = e - s
         hours = duration.seconds // 3600
         minutes = (duration.seconds % 3600) // 60
-        
+
         # Simplified duration format
         duration_str = ""
         if hours > 0:
             duration_str += f"{hours}h"
         if minutes > 0:
             duration_str += f"{minutes}m"
-            
+
         return f"{date_str:>10} @ {start_str} – {end_str} {tz_name} ({duration_str})"
 
     if compare:
@@ -435,12 +435,12 @@ def format_windows(windows: List[Tuple[datetime, datetime]], target_tz: str = "A
             target_end = end.astimezone(target_timezone)
             et_start = start
             et_end = end
-            
+
             target_line = format_window(target_start, target_end, target_start.tzname())
             et_line = format_window(et_start, et_end, et_start.tzname())
             max_length = max(max_length, len(target_line))
             formatted_pairs.append((target_line, et_line))
-        
+
         # Second pass: pad lines to align pipes
         for target_line, et_line in formatted_pairs:
             padded_line = f"{target_line:<{max_length}}  |  {et_line}"
@@ -458,7 +458,7 @@ def format_windows(windows: List[Tuple[datetime, datetime]], target_tz: str = "A
 
             formatted.append(format_window(start, end, start.tzname()))
             last_week = current_week  # Update last_week with current_week
-            
+
     return formatted
 
 def read_ical_from_file(file_path: str) -> str:
@@ -496,7 +496,7 @@ def main():
 
     work_start = datetime.strptime(args.start, '%H:%M').time()
     work_end = datetime.strptime(args.end, '%H:%M').time()
-    
+
     # Add timezone listing logic
     if args.list_timezones:
         now = datetime.now()
@@ -511,10 +511,10 @@ def main():
                 tz_info.append((tz_name, offset_hours))
             except Exception:
                 continue
-        
+
         # Sort by offset first, then by name
         tz_info.sort(key=itemgetter(1, 0))
-        
+
         print("\nAvailable timezones (sorted by offset):")
         for tz_name, offset_hours in tz_info:
             # Format offset as ±HH:MM
@@ -524,7 +524,7 @@ def main():
             offset_str = f"{sign}{hours:02d}:{minutes:02d}"
             print(f"  UTC{offset_str}  {tz_name}")
         return
-        
+
     try:
         # Parse start date if provided
         start_date = None
@@ -532,7 +532,7 @@ def main():
             et_tz = ZoneInfo("America/New_York")
             start_date = datetime.strptime(args.start_date, '%Y-%m-%d')
             start_date = start_date.replace(tzinfo=et_tz)
-            
+
         # New code to handle multiple calendars
         all_events = []
 
@@ -562,7 +562,7 @@ def main():
         )
         for time in free_times:
             print(time)
-            
+
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
         sys.exit(1)
