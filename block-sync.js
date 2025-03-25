@@ -5,8 +5,10 @@
 function reactiveEntryPoint() {
   const props = PropertiesService.getScriptProperties().getProperties();
   
-  // Create a cache to track event IDs we're creating blocks for
-  const blockCreationCache = {};
+  // Create a cross-calendar tracker to prevent duplicate block creation
+  // This prevents race conditions when the same event exists on multiple calendars
+  // and we process them sequentially
+  const crossCalendarBlockTracker = {};
 
   // Fetch events from scheduler calendar
   const schedulerEvents = fetchEventsByToken(props['schedulerCal'], false);
@@ -17,10 +19,10 @@ function reactiveEntryPoint() {
   console.log("got %d new event(s) from %s", homeEvents.length, props['homeCal']);
 
   // Process scheduler calendar (with attendee modification)
-  processCalendar(props['schedulerCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], true, false, blockCreationCache, schedulerEvents);
+  processCalendar(props['schedulerCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], true, false, crossCalendarBlockTracker, schedulerEvents);
   
   // Process home calendar (without attendee modification)
-  processCalendar(props['homeCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], false, false, blockCreationCache, homeEvents);
+  processCalendar(props['homeCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], false, false, crossCalendarBlockTracker, homeEvents);
 }
 
 /**
@@ -32,13 +34,15 @@ function reactiveEntryPoint() {
  * @param {string} workEmail - Email address for the work account
  * @param {boolean} addAttendees - Whether to add the home email as an attendee to events
  * @param {boolean} dryRun - If true, no actual changes will be made to calendars
- * @param {Object} blockCreationCache - Cache to track event IDs we're creating blocks for
+ * @param {Object} crossCalendarBlockTracker - Shared tracker to prevent duplicate block creation across multiple calendars.
+ *                                            Tracks which event IDs are currently in the process of having blocks created.
  * @param {Array} events - Array of events to process
  * @returns {void}
  */
-function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAttendees, dryRun, blockCreationCache, events) {
-  // Create a local cache for this execution
-  const blockCache = {};
+function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAttendees, dryRun, crossCalendarBlockTracker, events) {
+  // Create a local cache to minimize API calls when checking for existing blocks
+  // This cache stores the results of block lookups for the current calendar processing only
+  const blockLookupCache = {};
   
   console.log("Dry run: " + dryRun);
   if (dryRun) {
@@ -60,7 +64,7 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
       console.log("[%d: %s] parent event ID: %s", e, event.id, parentEventId);
       
       // Check if parent event has a block on the blocker calendar
-      const parentBlock = checkForBlockOnCalendar(blockerCalId, parentEventId, blockCache, e);
+      const parentBlock = checkForBlockOnCalendar(blockerCalId, parentEventId, blockLookupCache, e);
       
       // If parent event has a block, skip this instance
       if (parentBlock) {
@@ -98,7 +102,7 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
     }
 
     // Check if we already have a cached result for this event ID
-    const matchingBlock = checkForBlockOnCalendar(blockerCalId, event.id, blockCache, e);
+    const matchingBlock = checkForBlockOnCalendar(blockerCalId, event.id, blockLookupCache, e);
     
     // Now use the result to determine what to do
     if (matchingBlock) {
@@ -107,7 +111,7 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
       if (event.status == "cancelled") {
         console.log("[%d: %s] deleting block", e, event.id);
         deleteEvent(blockerCalId, matchingBlock.id);
-        blockCache[event.id] = null; // Update cache to reflect deletion
+        blockLookupCache[event.id] = null; // Update cache to reflect deletion
       // If the source calendar event was updated, then update the corresponding blocker calendar block if needed
       } else {
         const eventRecurrence = (event.recurrence ? event.recurrence : null);
@@ -123,19 +127,19 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
           updateEvent(blockerCalId, matchingBlock.id, matchingBlock);
           
           // Update the cache with the updated block
-          blockCache[event.id] = matchingBlock;
+          blockLookupCache[event.id] = matchingBlock;
         }
       }
     // If there's no matching block on the blocker calendar, then check our cache before creating it
     } else {
       if (event.status != "cancelled") {
         // Check if we've already initiated creating a block for this event
-        if (blockCreationCache[event.id]) {
+        if (crossCalendarBlockTracker[event.id]) {
           console.log("[%d: %s] block creation already in progress, skipping", e, event.id);
         } else {
           console.log("[%d: %s] creating block", e, event.id);
           // Add the event ID to our cache before creating the block
-          blockCreationCache[event.id] = true;
+          crossCalendarBlockTracker[event.id] = true;
           
           let block = {
             summary: "🟢 BLOCK",
@@ -151,7 +155,7 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
           
           // Update the cache with the newly created block if available
           if (createdBlock) {
-            blockCache[event.id] = createdBlock;
+            blockLookupCache[event.id] = createdBlock;
           }
         }
       }
@@ -166,15 +170,15 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
  * 
  * @param {string} blockerCalId - The ID of the blocker calendar
  * @param {string} eventId - The event ID to check for
- * @param {Object} blockCache - Cache object to store and retrieve results
+ * @param {Object} blockLookupCache - Cache object to store and retrieve lookup results to minimize API calls
  * @param {number} e - Event index for logging
  * @return {Object|null} - The matching block or null if not found
  */
-function checkForBlockOnCalendar(blockerCalId, eventId, blockCache, e = 0) {
+function checkForBlockOnCalendar(blockerCalId, eventId, blockLookupCache, e = 0) {
   // Check if we already have a cached result for this event ID
-  if (blockCache.hasOwnProperty(eventId)) {
-    console.log("[%d: %s] using cached block status: %s", e, eventId, blockCache[eventId] ? "found" : "not found");
-    return blockCache[eventId];
+  if (blockLookupCache.hasOwnProperty(eventId)) {
+    console.log("[%d: %s] using cached block status: %s", e, eventId, blockLookupCache[eventId] ? "found" : "not found");
+    return blockLookupCache[eventId];
   }
   
   // We haven't checked this event ID yet, so look for blocks on blocker calendar
@@ -196,18 +200,18 @@ function checkForBlockOnCalendar(blockerCalId, eventId, blockCache, e = 0) {
     }
     
     if (matchingBlock) {
-      blockCache[eventId] = matchingBlock;
+      blockLookupCache[eventId] = matchingBlock;
       return matchingBlock;
     } else {
       console.log("[%d: %s] found blocks with similar IDs but no exact match", e, eventId);
       // Store null in cache to indicate we checked but found no matching block
-      blockCache[eventId] = null;
+      blockLookupCache[eventId] = null;
       return null;
     }
   } else {
     console.log("[%d: %s] no blocks found", e, eventId);
     // Store null in cache to indicate we checked but found no matching block
-    blockCache[eventId] = null;
+    blockLookupCache[eventId] = null;
     return null;
   }
 }
