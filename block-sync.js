@@ -26,6 +26,37 @@ function reactiveEntryPoint() {
 }
 
 /**
+ * Proactive entry point that fetches events within a specific time window and processes them.
+ * Unlike reactiveEntryPoint, this doesn't use sync tokens stored in properties.
+ * Instead, it fetches all events within the time window from today to 90 days in the future.
+ */
+function proactiveEntryPoint() {
+  const props = PropertiesService.getScriptProperties().getProperties();
+  
+  // Create a cross-calendar tracker to prevent duplicate block creation
+  const crossCalendarBlockTracker = {};
+
+  // Define time window: from today to 90 days in the future
+  const today = new Date();
+  const futureDate = new Date(today);
+  futureDate.setDate(today.getDate() + 90);
+  
+  // Fetch events from scheduler calendar within time window
+  const schedulerEvents = fetchEventsByTimeWindow(props['schedulerCal'], today, futureDate);
+  console.log("got %d event(s) from %s within time window", schedulerEvents.length, props['schedulerCal']);
+
+  // Fetch events from home calendar within time window
+  const homeEvents = fetchEventsByTimeWindow(props['homeCal'], today, futureDate);
+  console.log("got %d event(s) from %s within time window", homeEvents.length, props['homeCal']);
+
+  // Process scheduler calendar (with attendee modification)
+  processCalendar(props['schedulerCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], true, false, crossCalendarBlockTracker, schedulerEvents);
+  
+  // Process home calendar (without attendee modification)
+  processCalendar(props['homeCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], false, false, crossCalendarBlockTracker, homeEvents);
+}
+
+/**
  * Processes events from a source calendar and creates/updates/deletes corresponding blocks on a blocker calendar.
  * 
  * @param {string} sourceCalId - ID of the source calendar to process events from
@@ -270,6 +301,47 @@ function createEvent(calendarId, event) {
   } catch (e) {
     console.log("create failed with error: %s", e.message);
   }
+}
+
+/**
+ * Retrieves events from a calendar within a specific time window
+ * 
+ * @param {string} calendarId - ID of the calendar to get events from
+ * @param {Date} startDate - Start date of the time window (inclusive)
+ * @param {Date} endDate - End date of the time window (inclusive)
+ * @returns {Array} - Array of event objects
+ */
+function fetchEventsByTimeWindow(calendarId, startDate, endDate) {
+  const options = {
+    timeMin: startDate.toISOString(),
+    timeMax: endDate.toISOString(),
+    maxResults: 100,
+    singleEvents: true, // Expand recurring events into instances
+    orderBy: 'startTime'
+  };
+  
+  // Retrieve events one page at a time
+  let evts = [];
+  let events;
+  let pageToken;
+  
+  do {
+    try {
+      options.pageToken = pageToken;
+      events = Calendar.Events.list(calendarId, options);
+    } catch (e) {
+      console.error("Error fetching events: " + e.message);
+      throw new Error(e.message);
+    }
+    
+    if (events.items && events.items.length > 0) {
+      evts = evts.concat(events.items);
+    }
+    
+    pageToken = events.nextPageToken;
+  } while (pageToken);
+  
+  return evts;
 }
 
 /**
