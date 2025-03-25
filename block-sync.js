@@ -1,3 +1,7 @@
+/**
+ * Main function that orchestrates the synchronization process between calendars.
+ * Retrieves script properties and processes both scheduler and home calendars.
+ */
 function main() {
   const props = PropertiesService.getScriptProperties().getProperties();
   
@@ -11,6 +15,18 @@ function main() {
   processCalendar(props['homeCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], false, false, blockCreationCache);
 }
 
+/**
+ * Processes events from a source calendar and creates/updates/deletes corresponding blocks on a blocker calendar.
+ * 
+ * @param {string} sourceCalId - ID of the source calendar to process events from
+ * @param {string} blockerCalId - ID of the blocker calendar where blocks will be created/updated/deleted
+ * @param {string} homeEmail - Email address for the home account
+ * @param {string} workEmail - Email address for the work account
+ * @param {boolean} addAttendees - Whether to add the home email as an attendee to events
+ * @param {boolean} dryRun - If true, no actual changes will be made to calendars
+ * @param {Object} blockCreationCache - Cache to track event IDs we're creating blocks for
+ * @returns {void}
+ */
 function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAttendees, dryRun, blockCreationCache) {
   // Look for created/updated/deleted events on the source calendar
   const events = logSyncedEvents(sourceCalId, false);
@@ -142,6 +158,7 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
 
 /**
  * Helper function to check for blocks on the blocker calendar
+ * 
  * @param {string} blockerCalId - The ID of the blocker calendar
  * @param {string} eventId - The event ID to check for
  * @param {Object} blockCache - Cache object to store and retrieve results
@@ -190,6 +207,13 @@ function checkForBlockOnCalendar(blockerCalId, eventId, blockCache, e = 0) {
   }
 }
 
+/**
+ * Deletes an event from a calendar
+ * 
+ * @param {string} calendarId - ID of the calendar containing the event
+ * @param {string} eventId - ID of the event to delete
+ * @returns {void}
+ */
 function deleteEvent(calendarId, eventId) {
   try {
     const deletedEvent = Calendar.Events.remove(calendarId, eventId, {
@@ -201,6 +225,14 @@ function deleteEvent(calendarId, eventId) {
   }
 }
 
+/**
+ * Updates an existing event on a calendar
+ * 
+ * @param {string} calendarId - ID of the calendar containing the event
+ * @param {string} eventId - ID of the event to update
+ * @param {Object} event - Event object with updated properties
+ * @returns {void}
+ */
 function updateEvent(calendarId, eventId, event) {
   try {
     const updatedEvent = Calendar.Events.update(event, calendarId, eventId, {
@@ -212,6 +244,13 @@ function updateEvent(calendarId, eventId, event) {
   }
 }
 
+/**
+ * Creates a new event on a calendar
+ * 
+ * @param {string} calendarId - ID of the calendar to create the event on
+ * @param {Object} event - Event object with properties for the new event
+ * @returns {Object|undefined} - The created event object or undefined if creation failed
+ */
 function createEvent(calendarId, event) {
   try {
     const createdEvent = Calendar.Events.insert(event, calendarId, {
@@ -224,6 +263,13 @@ function createEvent(calendarId, event) {
   }
 }
 
+/**
+ * Gets a date relative to today with a specific hour
+ * 
+ * @param {number} daysOffset - Number of days to offset from today (negative for past, positive for future)
+ * @param {number} hour - Hour of the day (0-23)
+ * @returns {Date} - Date object set to the specified day and hour
+ */
 function getRelativeDate(daysOffset, hour) {
   const date = new Date();
   date.setDate(date.getDate() + daysOffset);
@@ -234,6 +280,13 @@ function getRelativeDate(daysOffset, hour) {
   return date;
 }
 
+/**
+ * Retrieves events from a calendar that have been created, updated, or deleted since the last sync
+ * 
+ * @param {string} calendarId - ID of the calendar to get events from
+ * @param {boolean} fullSync - If true, performs a full sync instead of using sync tokens
+ * @returns {Array} - Array of event objects
+ */
 function logSyncedEvents(calendarId, fullSync) {
   const properties = PropertiesService.getUserProperties();
   
@@ -296,6 +349,12 @@ function logSyncedEvents(calendarId, fullSync) {
   return evts;
 }
 
+/**
+ * Resets the sync token for a specific calendar or all calendars
+ * 
+ * @param {string|null} calendarId - ID of the calendar to reset sync token for, or null to reset all sync tokens
+ * @returns {void}
+ */
 function resetSyncToken(calendarId) {
   const properties = PropertiesService.getUserProperties();
   let syncTokens = {};
