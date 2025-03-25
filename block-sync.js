@@ -2,7 +2,7 @@
  * Main function that orchestrates the synchronization process between calendars.
  * Retrieves script properties and processes both scheduler and home calendars.
  */
-function main() {
+function reactiveEntryPoint() {
   const props = PropertiesService.getScriptProperties().getProperties();
   
   // Create a cache to track event IDs we're creating blocks for
@@ -29,7 +29,7 @@ function main() {
  */
 function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAttendees, dryRun, blockCreationCache) {
   // Look for created/updated/deleted events on the source calendar
-  const events = logSyncedEvents(sourceCalId, false);
+  const events = fetchEventsByToken(sourceCalId, false);
   console.log("got %d new event(s) from %s", events.length, sourceCalId);
   
   // Create a local cache for this execution
@@ -287,7 +287,7 @@ function getRelativeDate(daysOffset, hour) {
  * @param {boolean} fullSync - If true, performs a full sync instead of using sync tokens
  * @returns {Array} - Array of event objects
  */
-function logSyncedEvents(calendarId, fullSync) {
+function fetchEventsByToken(calendarId, fullSync) {
   const properties = PropertiesService.getUserProperties();
   
   // Get all sync tokens as a JSON object
@@ -327,7 +327,7 @@ function logSyncedEvents(calendarId, fullSync) {
       if (e.message.includes("Sync token is no longer valid")) {
         delete syncTokens[calendarId];
         properties.setProperty("syncTokens", JSON.stringify(syncTokens));
-        return logSyncedEvents(calendarId, true);
+        return fetchEventsByToken(calendarId, true);
       } else {
         throw new Error(e.message);
       }
