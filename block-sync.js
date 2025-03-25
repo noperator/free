@@ -30,10 +30,35 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
     e += 1
     console.log("[%d: %s] event: %s", e, event.id, event.summary || "No summary available");
 
-    // Skip events with IDs that match the timestamp pattern (recurring instances)
+    // Handle recurring event instances (events with IDs ending with timestamp)
     if (event.id.match(/^.*_\d{8}T\d{6}Z$/)) {
-      console.log("[%d: %s] skipping recurring instance", e, event.id);
-      continue;
+      console.log("[%d: %s] detected recurring instance", e, event.id);
+      
+      // Extract the parent event ID by removing the timestamp suffix
+      const parentEventId = event.id.replace(/_\d{8}T\d{6}Z$/, '');
+      console.log("[%d: %s] parent event ID: %s", e, event.id, parentEventId);
+      
+      // Check if parent event has a block on the blocker calendar
+      const parentBlock = checkForBlockOnCalendar(blockerCalId, parentEventId, blockCache, e);
+      
+      // If parent event has a block, skip this instance
+      if (parentBlock) {
+        console.log("[%d: %s] parent event has a block, skipping instance", e, event.id);
+        continue;
+      } else {
+        // Check if the event start date is more than 90 days from today
+        const today = new Date();
+        const eventStartDate = new Date(event.start.dateTime || event.start.date);
+        const daysDifference = Math.floor((eventStartDate - today) / (1000 * 60 * 60 * 24));
+        
+        if (daysDifference > 90) {
+          console.log("[%d: %s] instance is more than 90 days in the future (%d days), skipping", e, event.id, daysDifference);
+          continue;
+        }
+        
+        console.log("[%d: %s] parent event does not have a block, processing instance", e, event.id);
+        // Continue processing this instance as a normal event
+      }
     }
     
     // If requested, ensure the home email is added as an attendee (only for scheduler calendar)
@@ -52,43 +77,9 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
     }
 
     // Check if we already have a cached result for this event ID
-    if (blockCache.hasOwnProperty(event.id)) {
-      console.log("[%d: %s] using cached block status: %s", e, event.id, blockCache[event.id] ? "found" : "not found");
-    } else {
-      // We haven't checked this event ID yet, so look for blocks on blocker calendar
-      console.log("[%d: %s] checking blocker calendar for matching blocks", e, event.id);
-      const blocks = Calendar.Events.list(blockerCalId, {
-        q: event.id,
-      });
-      
-      // Check if any of the returned items have a description that EXACTLY matches the event ID
-      if (blocks.items && blocks.items.length > 0) {
-        let matchingBlock = null;
-        for (let block of blocks.items) {
-          if (block.description === event.id) {
-            console.log("[%d: %s] found exact matching block", e, event.id);
-            // Store the matching block in cache
-            matchingBlock = block;
-            break;
-          }
-        }
-        
-        if (matchingBlock) {
-          blockCache[event.id] = matchingBlock;
-        } else {
-          console.log("[%d: %s] found blocks with similar IDs but no exact match", e, event.id);
-          // Store null in cache to indicate we checked but found no matching block
-          blockCache[event.id] = null;
-        }
-      } else {
-        console.log("[%d: %s] no blocks found", e, event.id);
-        // Store null in cache to indicate we checked but found no matching block
-        blockCache[event.id] = null;
-      }
-    }
+    const matchingBlock = checkForBlockOnCalendar(blockerCalId, event.id, blockCache, e);
     
-    // Now use the cached result to determine what to do
-    const matchingBlock = blockCache[event.id];
+    // Now use the result to determine what to do
     if (matchingBlock) {
       // A matching block exists for this event ID
       // If the source calendar event was deleted, then delete its matching block on the blocker calendar
@@ -147,6 +138,56 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
   }
   
   return; // Return nothing
+}
+
+/**
+ * Helper function to check for blocks on the blocker calendar
+ * @param {string} blockerCalId - The ID of the blocker calendar
+ * @param {string} eventId - The event ID to check for
+ * @param {Object} blockCache - Cache object to store and retrieve results
+ * @param {number} e - Event index for logging
+ * @return {Object|null} - The matching block or null if not found
+ */
+function checkForBlockOnCalendar(blockerCalId, eventId, blockCache, e = 0) {
+  // Check if we already have a cached result for this event ID
+  if (blockCache.hasOwnProperty(eventId)) {
+    console.log("[%d: %s] using cached block status: %s", e, eventId, blockCache[eventId] ? "found" : "not found");
+    return blockCache[eventId];
+  }
+  
+  // We haven't checked this event ID yet, so look for blocks on blocker calendar
+  console.log("[%d: %s] checking blocker calendar for matching blocks", e, eventId);
+  const blocks = Calendar.Events.list(blockerCalId, {
+    q: eventId,
+  });
+  
+  // Check if any of the returned items have a description that EXACTLY matches the event ID
+  if (blocks.items && blocks.items.length > 0) {
+    let matchingBlock = null;
+    for (let block of blocks.items) {
+      if (block.description === eventId) {
+        console.log("[%d: %s] found exact matching block", e, eventId);
+        // Store the matching block in cache
+        matchingBlock = block;
+        break;
+      }
+    }
+    
+    if (matchingBlock) {
+      blockCache[eventId] = matchingBlock;
+      return matchingBlock;
+    } else {
+      console.log("[%d: %s] found blocks with similar IDs but no exact match", e, eventId);
+      // Store null in cache to indicate we checked but found no matching block
+      blockCache[eventId] = null;
+      return null;
+    }
+  } else {
+    console.log("[%d: %s] no blocks found", e, eventId);
+    // Store null in cache to indicate we checked but found no matching block
+    blockCache[eventId] = null;
+    return null;
+  }
 }
 
 function deleteEvent(calendarId, eventId) {
