@@ -147,8 +147,46 @@ function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAtt
       } else {
         const eventRecurrence = (event.recurrence ? event.recurrence : null);
         const blockRecurrence = (matchingBlock.recurrence ? matchingBlock.recurrence : null);
-        if (matchingBlock.start != event.start || matchingBlock.end != event.end || blockRecurrence != eventRecurrence) {
-          console.log("[%d: %s] updating block", e, event.id);
+        
+        // Helper function to compare date objects properly
+        const areDatesEqual = (date1, date2) => {
+          if (!date1 && !date2) return true;
+          if (!date1 || !date2) return false;
+          return date1.dateTime === date2.dateTime && date1.timeZone === date2.timeZone;
+        };
+        
+        // Helper function to compare recurrence values properly
+        const areRecurrencesEqual = (rec1, rec2) => {
+          if (!rec1 && !rec2) return true;
+          if (!rec1 || !rec2) return false;
+          
+          // Handle array comparison
+          if (Array.isArray(rec1) && Array.isArray(rec2)) {
+            if (rec1.length !== rec2.length) return false;
+            // Compare each rule in the array
+            return rec1.every((rule, i) => rule === rec2[i]);
+          }
+          
+          // Direct comparison for non-arrays (strings)
+          return String(rec1) === String(rec2);
+        };
+        
+        const startChanged = !areDatesEqual(matchingBlock.start, event.start);
+        const endChanged = !areDatesEqual(matchingBlock.end, event.end);
+        const recurrenceChanged = !areRecurrencesEqual(blockRecurrence, eventRecurrence);
+        
+        if (startChanged || endChanged || recurrenceChanged) {
+          const changes = [];
+          if (startChanged) {
+            changes.push(`start: ${JSON.stringify(matchingBlock.start)} → ${JSON.stringify(event.start)}`);
+          }
+          if (endChanged) {
+            changes.push(`end: ${JSON.stringify(matchingBlock.end)} → ${JSON.stringify(event.end)}`);
+          }
+          if (recurrenceChanged) {
+            changes.push(`recurrence: ${JSON.stringify(blockRecurrence)} → ${JSON.stringify(eventRecurrence)}`);
+          }
+          console.log("[%d: %s] updating block - changes: %s", e, event.id, changes.join(", "));
           matchingBlock.start = event.start;
           matchingBlock.end = event.end;
           delete matchingBlock.recurrence;
@@ -315,9 +353,7 @@ function fetchEventsByTimeWindow(calendarId, startDate, endDate) {
   const options = {
     timeMin: startDate.toISOString(),
     timeMax: endDate.toISOString(),
-    maxResults: 100,
-    singleEvents: true, // Expand recurring events into instances
-    orderBy: 'startTime'
+    // maxResults: 100,
   };
   
   // Retrieve events one page at a time
