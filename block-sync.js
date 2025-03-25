@@ -8,11 +8,19 @@ function reactiveEntryPoint() {
   // Create a cache to track event IDs we're creating blocks for
   const blockCreationCache = {};
 
+  // Fetch events from scheduler calendar
+  const schedulerEvents = fetchEventsByToken(props['schedulerCal'], false);
+  console.log("got %d new event(s) from %s", schedulerEvents.length, props['schedulerCal']);
+
+  // Fetch events from home calendar
+  const homeEvents = fetchEventsByToken(props['homeCal'], false);
+  console.log("got %d new event(s) from %s", homeEvents.length, props['homeCal']);
+
   // Process scheduler calendar (with attendee modification)
-  processCalendar(props['schedulerCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], true, false, blockCreationCache);
+  processCalendar(props['schedulerCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], true, false, blockCreationCache, schedulerEvents);
   
   // Process home calendar (without attendee modification)
-  processCalendar(props['homeCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], false, false, blockCreationCache);
+  processCalendar(props['homeCal'], props['blockerCal'], props['homeEmail'], props['workEmail'], false, false, blockCreationCache, homeEvents);
 }
 
 /**
@@ -25,13 +33,10 @@ function reactiveEntryPoint() {
  * @param {boolean} addAttendees - Whether to add the home email as an attendee to events
  * @param {boolean} dryRun - If true, no actual changes will be made to calendars
  * @param {Object} blockCreationCache - Cache to track event IDs we're creating blocks for
+ * @param {Array} events - Array of events to process
  * @returns {void}
  */
-function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAttendees, dryRun, blockCreationCache) {
-  // Look for created/updated/deleted events on the source calendar
-  const events = fetchEventsByToken(sourceCalId, false);
-  console.log("got %d new event(s) from %s", events.length, sourceCalId);
-  
+function processCalendar(sourceCalId, blockerCalId, homeEmail, workEmail, addAttendees, dryRun, blockCreationCache, events) {
   // Create a local cache for this execution
   const blockCache = {};
   
