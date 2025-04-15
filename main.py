@@ -289,7 +289,9 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
                      strict: bool = False,
                      work_start: time = time(10, 0),
                      work_end: time = time(17, 0),
-                     extended: bool = False) -> List[Tuple[datetime, datetime, bool]]:
+                     extended: bool = False,
+                     ext_start: time = time(7, 0),
+                     ext_end: time = time(20, 0)) -> List[Tuple[datetime, datetime, bool]]:
 
     # print(f"work_start: {work_start}, work_end: {work_end}")
 
@@ -309,10 +311,10 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
     current = (now + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
 
     # Define early and late hours for extended mode
-    early_start = time(7, 0)
-    early_end = time(10, 0)
-    late_start = time(17, 0)
-    late_end = time(20, 0)
+    early_start = ext_start
+    early_end = work_start
+    late_start = work_end
+    late_end = ext_end
 
     while current < end_date:
         is_weekend = current.weekday() >= 5  # Saturday or Sunday
@@ -386,7 +388,7 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
                 else:
                     free_windows.append((day_start, day_end, is_extended_slot))
             
-            # Add early slots (7-10 AM) for all days
+            # Add early slots (ext_start to work_start) for all days
             if current.date() not in holiday_dates:
                 is_extended_slot = True
                 early_day_start = current.replace(hour=early_start.hour, minute=early_start.minute)
@@ -399,12 +401,12 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
                     
                     # Check if the early hours are valid in both timezones
                     # This is a bit different since we're checking specific early hours
-                    if (target_start.hour < 10 and target_end.hour <= 10) or (target_start.hour < 10 and target_end.minute == 0):
+                    if (target_start.hour < work_start.hour and target_end.hour <= work_start.hour) or (target_start.hour < work_start.hour and target_end.minute == 0):
                         free_windows.append((early_day_start, early_day_end, is_extended_slot))
                 else:
                     free_windows.append((early_day_start, early_day_end, is_extended_slot))
             
-            # Add late slots (5-8 PM) for all days
+            # Add late slots (work_end to ext_end) for all days
             if current.date() not in holiday_dates:
                 is_extended_slot = True
                 late_day_start = current.replace(hour=late_start.hour, minute=late_start.minute)
@@ -417,7 +419,7 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
                     
                     # Check if the late hours are valid in both timezones
                     # This is a bit different since we're checking specific late hours
-                    if (target_start.hour >= 17 and target_end.hour <= 20) or (target_start.hour >= 17 and target_end.minute == 0):
+                    if (target_start.hour >= work_end.hour and target_end.hour <= ext_end.hour) or (target_start.hour >= work_end.hour and target_end.minute == 0):
                         free_windows.append((late_day_start, late_day_end, is_extended_slot))
                 else:
                     free_windows.append((late_day_start, late_day_end, is_extended_slot))
@@ -481,7 +483,7 @@ def format_windows(windows: List[Tuple[datetime, datetime, bool]], target_tz: st
     target_timezone = ZoneInfo(target_tz)
     et_tz = ZoneInfo("America/New_York")
     
-    # First pass to find the maximum duration length
+    # First pass to find the maximum length of formatted lines
     max_duration_len = 0
     for start, end, is_extended in windows:
         start = start.astimezone(target_timezone)
@@ -619,12 +621,18 @@ def main():
     parser.add_argument('--end', type=str, default='17:00',
                        help='Work end time in HH:MM format (default: 17:00)')
     parser.add_argument('-w', '--extended', action='store_true',
-                       help='Include weekends and extended hours (7-10 AM and 5-8 PM)')
+                       help='Include weekends and extended hours outside of regular working hours')
+    parser.add_argument('--ext-start', type=str, default='07:00',
+                       help='Start time for extended hours in HH:MM format (default: 07:00)')
+    parser.add_argument('--ext-end', type=str, default='20:00',
+                       help='End time for extended hours in HH:MM format (default: 20:00)')
 
     args = parser.parse_args()
 
     work_start = datetime.strptime(args.start, '%H:%M').time()
     work_end = datetime.strptime(args.end, '%H:%M').time()
+    ext_start = datetime.strptime(args.ext_start, '%H:%M').time()
+    ext_end = datetime.strptime(args.ext_end, '%H:%M').time()
 
     # Add timezone listing logic
     if args.list_timezones:
@@ -685,7 +693,9 @@ def main():
                 strict=args.strict,
                 work_start=work_start,
                 work_end=work_end,
-                extended=args.extended
+                extended=args.extended,
+                ext_start=ext_start,
+                ext_end=ext_end
             ),
             target_tz=args.timezone,
             compare=args.compare
