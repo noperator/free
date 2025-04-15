@@ -41,7 +41,9 @@ CAL_URLS=(
 ### Usage
 
 ```
-usage: main.py [-h] (-f FILES [FILES ...] | -u URLS [URLS ...] | -l) [-v] [-t TIMEZONE] [-s START_DATE] [-r] [-c] [--start START] [--end END]
+𝄢 python3 main.py -h
+usage: main.py [-h] (-f FILES [FILES ...] | -u URLS [URLS ...] | -l) [-v] [-t TIMEZONE] [-s START_DATE] [-r] [-c] [--start START]
+               [--end END] [-w] [--ext-start EXT_START] [--ext-end EXT_END] [--buffer BUFFER] [--min-duration MIN_DURATION]
 
 Cross-reference multiple calendars to find free time slots
 
@@ -61,11 +63,14 @@ options:
   -c, --compare         Show times in both local (ET) and target timezone
   --start START         Work start time in HH:MM format (default: 10:00)
   --end END             Work end time in HH:MM format (default: 17:00)
+  -w, --extended        Include weekends and extended hours outside of regular working hours
+  --ext-start EXT_START
+                        Start time for extended hours in HH:MM format (default: 07:00)
+  --ext-end EXT_END     End time for extended hours in HH:MM format (default: 20:00)
+  --buffer BUFFER       Buffer time in minutes to add before and after busy events (default: 30)
+  --min-duration MIN_DURATION
+                        Minimum duration in minutes for free windows (default: 30)
 
-source venv/bin/activate
-python3 main.py -u \
-    'https://calendar.google.com/calendar/ical/<ACCOUNT>/<CALENDAR>/basic.ics' \
-    'https://outlook.office365.com/owa/calendar/<ACCOUNT>/<CALENDAR>/calendar.ics'
 
 Mon 27 Jan @ 10:00 AM – 11:00 AM EST (1h)
 Mon 27 Jan @  4:15 PM –  5:00 PM EST (45m)
@@ -98,6 +103,6 @@ Fri  7 Feb @  1:00 PM –  5:00 PM EST (4h)
 
 - [ ] document getting calendar links for Outlook, Google
 - [ ] dynamically determine default timezone (vs. hardcoding ET)
-- [ ] min duration as cli opt
-- [ ] min buffer as cli opt
+- [x] min duration as cli opt
+- [x] min buffer as cli opt
 - [ ] in web ui, allow specifying local timezone
