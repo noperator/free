@@ -576,17 +576,35 @@ def format_windows(windows: List[Tuple[datetime, datetime, bool]], target_tz: st
             padded_line = f"{target_line:<{max_length}}  |  {et_line}"
             formatted.append(padded_line)
     else:
-        # Original single timezone output
+        # Group windows by date for better ordering
+        date_windows = {}
         for start, end, is_extended in windows:
             start = start.astimezone(target_timezone)
             end = end.astimezone(target_timezone)
-
+            
+            date_key = start.date()
+            if date_key not in date_windows:
+                date_windows[date_key] = []
+            
+            # Store tuple with start time hour for sorting
+            date_windows[date_key].append((start, end, is_extended, start.hour))
+        
+        # Process dates in order
+        for date_key in sorted(date_windows.keys()):
+            windows_for_date = date_windows[date_key]
+            
+            # Sort by hour to ensure morning, work day, evening order
+            windows_for_date.sort(key=lambda x: x[3])
+            
             # Check if we need to add a newline between weeks
-            current_week = start.isocalendar()[1]
+            current_week = date_key.isocalendar()[1]
             if last_week is not None and current_week != last_week:
                 formatted.append("")  # Add empty string for newline
-
-            formatted.append(format_window(start, end, start.tzname(), is_extended))
+            
+            # Format all windows for this date
+            for start, end, is_extended, _ in windows_for_date:
+                formatted.append(format_window(start, end, start.tzname(), is_extended))
+            
             last_week = current_week  # Update last_week with current_week
 
     return formatted
