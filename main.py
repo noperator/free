@@ -291,7 +291,8 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
                      work_end: time = time(17, 0),
                      extended: bool = False,
                      ext_start: time = time(7, 0),
-                     ext_end: time = time(20, 0)) -> List[Tuple[datetime, datetime, bool]]:
+                     ext_end: time = time(20, 0),
+                     min_duration: int = 30) -> List[Tuple[datetime, datetime, bool]]:
 
     # print(f"work_start: {work_start}, work_end: {work_end}")
 
@@ -455,10 +456,10 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
         if current < free_end:
             result.append((current, free_end, is_extended))
 
-    # Filter windows shorter than 30 minutes
-    min_duration = timedelta(minutes=30)
+    # Filter windows shorter than min_duration
+    min_duration_td = timedelta(minutes=min_duration)
     filtered_windows = [(start, end, is_extended) for start, end, is_extended in result 
-                       if end - start >= min_duration]
+                       if end - start >= min_duration_td]
 
     # Round start times up to next 15-minute boundary
     final_result = []
@@ -471,7 +472,7 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
         else:
             start = start.replace(minute=rounded_minutes)
 
-        if start < end and end - start >= min_duration:
+        if start < end and end - start >= min_duration_td:
             final_result.append((start, end, is_extended))
 
     return final_result
@@ -626,6 +627,10 @@ def main():
                        help='Start time for extended hours in HH:MM format (default: 07:00)')
     parser.add_argument('--ext-end', type=str, default='20:00',
                        help='End time for extended hours in HH:MM format (default: 20:00)')
+    parser.add_argument('--buffer', type=int, default=30,
+                       help='Buffer time in minutes to add before and after busy events (default: 30)')
+    parser.add_argument('--min-duration', type=int, default=30,
+                       help='Minimum duration in minutes for free windows (default: 30)')
 
     args = parser.parse_args()
 
@@ -688,6 +693,8 @@ def main():
         free_times = format_windows(
             find_free_windows(
                 all_events,  # Use combined events from all calendars
+                buffer_mins=args.buffer,
+                min_duration=args.min_duration,
                 start_date=start_date,
                 target_tz=args.timezone,
                 strict=args.strict,
