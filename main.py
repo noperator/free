@@ -288,7 +288,8 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
                      target_tz: str = "America/New_York",
                      strict: bool = False,
                      work_start: time = time(10, 0),
-                     work_end: time = time(17, 0)) -> List[Tuple[datetime, datetime]]:
+                     work_end: time = time(17, 0),
+                     wide: bool = False) -> List[Tuple[datetime, datetime, bool]]:
 
     # print(f"work_start: {work_start}, work_end: {work_end}")
 
@@ -307,19 +308,63 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
     free_windows = []
     current = (now + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
 
+    # Define early and late hours for wide mode
+    early_start = time(7, 0)
+    early_end = time(10, 0)
+    late_start = time(17, 0)
+    late_end = time(20, 0)
+
     while current < end_date:
-        if current.weekday() < 5:  # Monday-Friday
-            if current.date() not in holiday_dates:
+        is_weekend = current.weekday() >= 5  # Saturday or Sunday
+        is_wide_slot = False
+        
+        # Regular weekday slots (Mon-Fri)
+        if current.weekday() < 5 and current.date() not in holiday_dates:
+            day_start = current.replace(hour=work_start.hour, minute=work_start.minute)
+            day_end = current.replace(hour=work_end.hour, minute=work_end.minute)
+
+            if strict:
+                # Convert to target timezone to check working hours there
+                target_start = day_start.astimezone(target_timezone)
+                target_end = day_end.astimezone(target_timezone)
+
+                # Adjust window to respect working hours in both timezones
+                # Start time should be no earlier than 10 AM in either timezone
+                et_start = day_start
+                target_start = target_start.replace(
+                    hour=work_start.hour,
+                    minute=work_start.minute
+                )
+                effective_start = max(et_start, target_start.astimezone(et_tz))
+
+                # End time should be no later than 5 PM in either timezone
+                et_end = day_end
+                target_end = target_end.replace(
+                    hour=work_end.hour,
+                    minute=work_end.minute
+                )
+                effective_end = min(et_end, target_end.astimezone(et_tz))
+
+                # Only add the window if there's actually time available
+                if effective_start < effective_end:
+                    free_windows.append((effective_start, effective_end, is_wide_slot))
+            else:
+                free_windows.append((day_start, day_end, is_wide_slot))
+        
+        # Wide mode: add weekend, early, and late slots
+        if wide:
+            # Add weekend slots (if it's a weekend)
+            if is_weekend and current.date() not in holiday_dates:
+                is_wide_slot = True
                 day_start = current.replace(hour=work_start.hour, minute=work_start.minute)
                 day_end = current.replace(hour=work_end.hour, minute=work_end.minute)
-
+                
                 if strict:
                     # Convert to target timezone to check working hours there
                     target_start = day_start.astimezone(target_timezone)
                     target_end = day_end.astimezone(target_timezone)
 
                     # Adjust window to respect working hours in both timezones
-                    # Start time should be no earlier than 10 AM in either timezone
                     et_start = day_start
                     target_start = target_start.replace(
                         hour=work_start.hour,
@@ -337,9 +382,45 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
 
                     # Only add the window if there's actually time available
                     if effective_start < effective_end:
-                        free_windows.append((effective_start, effective_end))
+                        free_windows.append((effective_start, effective_end, is_wide_slot))
                 else:
-                    free_windows.append((day_start, day_end))
+                    free_windows.append((day_start, day_end, is_wide_slot))
+            
+            # Add early slots (7-10 AM) for all days
+            if current.date() not in holiday_dates:
+                is_wide_slot = True
+                early_day_start = current.replace(hour=early_start.hour, minute=early_start.minute)
+                early_day_end = current.replace(hour=early_end.hour, minute=early_end.minute)
+                
+                if strict:
+                    # Convert to target timezone to check working hours
+                    target_start = early_day_start.astimezone(target_timezone)
+                    target_end = early_day_end.astimezone(target_timezone)
+                    
+                    # Check if the early hours are valid in both timezones
+                    # This is a bit different since we're checking specific early hours
+                    if (target_start.hour < 10 and target_end.hour <= 10) or (target_start.hour < 10 and target_end.minute == 0):
+                        free_windows.append((early_day_start, early_day_end, is_wide_slot))
+                else:
+                    free_windows.append((early_day_start, early_day_end, is_wide_slot))
+            
+            # Add late slots (5-8 PM) for all days
+            if current.date() not in holiday_dates:
+                is_wide_slot = True
+                late_day_start = current.replace(hour=late_start.hour, minute=late_start.minute)
+                late_day_end = current.replace(hour=late_end.hour, minute=late_end.minute)
+                
+                if strict:
+                    # Convert to target timezone to check working hours
+                    target_start = late_day_start.astimezone(target_timezone)
+                    target_end = late_day_end.astimezone(target_timezone)
+                    
+                    # Check if the late hours are valid in both timezones
+                    # This is a bit different since we're checking specific late hours
+                    if (target_start.hour >= 17 and target_end.hour <= 20) or (target_start.hour >= 17 and target_end.minute == 0):
+                        free_windows.append((late_day_start, late_day_end, is_wide_slot))
+                else:
+                    free_windows.append((late_day_start, late_day_end, is_wide_slot))
 
         current += timedelta(days=1)
 
@@ -361,25 +442,25 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
 
     # Remove busy times from free windows
     result = []
-    for free_start, free_end in free_windows:
+    for free_start, free_end, is_wide in free_windows:
         current = free_start
         for busy_start, busy_end in merged:
             # Fix: Only process busy times that overlap with the free window
             if busy_end > current and busy_start < free_end:
                 if current < busy_start:
-                    result.append((current, busy_start))
+                    result.append((current, busy_start, is_wide))
                 current = max(current, busy_end)
         if current < free_end:
-            result.append((current, free_end))
+            result.append((current, free_end, is_wide))
 
     # Filter windows shorter than 30 minutes
     min_duration = timedelta(minutes=30)
-    filtered_windows = [(start, end) for start, end in result 
+    filtered_windows = [(start, end, is_wide) for start, end, is_wide in result 
                        if end - start >= min_duration]
 
     # Round start times up to next 15-minute boundary
     final_result = []
-    for start, end in filtered_windows:
+    for start, end, is_wide in filtered_windows:
         # Round up start time to next 15-minute boundary
         minutes = start.minute
         rounded_minutes = ((minutes + 14) // 15) * 15  # Rounds up to next 15
@@ -389,18 +470,39 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
             start = start.replace(minute=rounded_minutes)
 
         if start < end and end - start >= min_duration:
-            final_result.append((start, end))
+            final_result.append((start, end, is_wide))
 
     return final_result
 
-def format_windows(windows: List[Tuple[datetime, datetime]], target_tz: str = "America/New_York", compare: bool = False) -> List[str]:
+def format_windows(windows: List[Tuple[datetime, datetime, bool]], target_tz: str = "America/New_York", compare: bool = False) -> List[str]:
     """Format time windows in the requested format."""
     formatted = []
     last_week = None
     target_timezone = ZoneInfo(target_tz)
     et_tz = ZoneInfo("America/New_York")
+    
+    # First pass to find the maximum duration length
+    max_duration_len = 0
+    for start, end, is_wide in windows:
+        start = start.astimezone(target_timezone)
+        end = end.astimezone(target_timezone)
+        
+        duration = end - start
+        hours = duration.seconds // 3600
+        minutes = (duration.seconds % 3600) // 60
+        
+        # Format duration
+        duration_str = ""
+        if hours > 0:
+            duration_str += f"{hours}h"
+            if minutes > 0:
+                duration_str += f"{minutes}m"
+        elif minutes > 0:
+            duration_str += f"{minutes}m"
+            
+        max_duration_len = max(max_duration_len, len(duration_str))
 
-    def format_window(s, e, tz_name):
+    def format_window(s, e, tz_name, is_wide=False):
         day_str = str(s.day)
         if len(day_str) == 1:
             day_str = " " + day_str
@@ -417,27 +519,52 @@ def format_windows(windows: List[Tuple[datetime, datetime]], target_tz: str = "A
         hours = duration.seconds // 3600
         minutes = (duration.seconds % 3600) // 60
 
-        # Simplified duration format
+        # Format duration
         duration_str = ""
         if hours > 0:
             duration_str += f"{hours}h"
-        if minutes > 0:
+            if minutes > 0:
+                duration_str += f"{minutes}m"
+        elif minutes > 0:
             duration_str += f"{minutes}m"
+        
+        # Add type indicator for wide slots
+        type_indicator = ""
+        if is_wide:
+            indicators = []
+            # Weekend
+            if s.weekday() >= 5:
+                indicators.append("wknd")
+            
+            # Early morning hours (7-10 AM)
+            if s.hour < 10:
+                indicators.append("morn")
+            # Evening hours (5-8 PM)
+            elif s.hour >= 17:
+                indicators.append("even")
+            
+            type_indicator = " ".join(indicators)
 
-        return f"{date_str:>10} @ {start_str} – {end_str} {tz_name} ({duration_str})"
+        # Format with proper columnation - ensuring all type indicators are aligned
+        padded_duration = f"({duration_str})"
+        if type_indicator:
+            # Pad to max_duration_len + 2 (for the parentheses)
+            return f"{date_str:>10} @ {start_str} – {end_str} {tz_name} {padded_duration:<{max_duration_len+2}} {type_indicator}"
+        else:
+            return f"{date_str:>10} @ {start_str} – {end_str} {tz_name} {padded_duration}"
 
     if compare:
         # First pass: calculate the maximum length of formatted lines
         max_length = 0
         formatted_pairs = []
-        for start, end in windows:
+        for start, end, is_wide in windows:
             target_start = start.astimezone(target_timezone)
             target_end = end.astimezone(target_timezone)
             et_start = start
             et_end = end
 
-            target_line = format_window(target_start, target_end, target_start.tzname())
-            et_line = format_window(et_start, et_end, et_start.tzname())
+            target_line = format_window(target_start, target_end, target_start.tzname(), is_wide)
+            et_line = format_window(et_start, et_end, et_start.tzname(), is_wide)
             max_length = max(max_length, len(target_line))
             formatted_pairs.append((target_line, et_line))
 
@@ -447,7 +574,7 @@ def format_windows(windows: List[Tuple[datetime, datetime]], target_tz: str = "A
             formatted.append(padded_line)
     else:
         # Original single timezone output
-        for start, end in windows:
+        for start, end, is_wide in windows:
             start = start.astimezone(target_timezone)
             end = end.astimezone(target_timezone)
 
@@ -456,7 +583,7 @@ def format_windows(windows: List[Tuple[datetime, datetime]], target_tz: str = "A
             if last_week is not None and current_week != last_week:
                 formatted.append("")  # Add empty string for newline
 
-            formatted.append(format_window(start, end, start.tzname()))
+            formatted.append(format_window(start, end, start.tzname(), is_wide))
             last_week = current_week  # Update last_week with current_week
 
     return formatted
@@ -491,6 +618,8 @@ def main():
                        help='Work start time in HH:MM format (default: 10:00)')
     parser.add_argument('--end', type=str, default='17:00',
                        help='Work end time in HH:MM format (default: 17:00)')
+    parser.add_argument('-w', '--wide', action='store_true',
+                       help='Include weekends and extended hours (7-10 AM and 5-8 PM)')
 
     args = parser.parse_args()
 
@@ -555,7 +684,8 @@ def main():
                 target_tz=args.timezone,
                 strict=args.strict,
                 work_start=work_start,
-                work_end=work_end
+                work_end=work_end,
+                wide=args.wide
             ),
             target_tz=args.timezone,
             compare=args.compare
