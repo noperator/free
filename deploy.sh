@@ -17,14 +17,19 @@ echo -e "last updated $DATE\n" >"$TEXT_FILE"
 
 echo -e "last updated $DATE\n" >"$EXT_TEXT_FILE"
 
-mkdir -p "$DEPLOY_DIR"
-mkdir -p "$DEPLOY_DIR/ext"
-mkdir -p "$CAL_DIR"
-rm "$DEPLOY_DIR"/* 2>/dev/null
-rm "$DEPLOY_DIR/ext"/* 2>/dev/null
-rm "$CAL_DIR"/* 2>/dev/null
+if ! grep -q "^EXT_DIR=" .env; then
+    echo "EXT_DIR=$(LC_ALL=C base64 </dev/urandom | tr -d '/+=' | head -c 32)" >>.env
+    echo "Generated new random EXT_DIR: $EXT_DIR"
+fi
 
 source .env
+
+mkdir -p "$DEPLOY_DIR"
+mkdir -p "$DEPLOY_DIR/$EXT_DIR"
+mkdir -p "$CAL_DIR"
+rm "$DEPLOY_DIR"/* 2>/dev/null
+rm "$DEPLOY_DIR/$EXT_DIR"/* 2>/dev/null
+rm "$CAL_DIR"/* 2>/dev/null
 
 for CAL_URL in "${CAL_URLS[@]}"; do
     wget -P "$CAL_DIR" "$CAL_URL"
@@ -70,7 +75,7 @@ $(cat "$TEXT_FILE")
 </html>
 EOF
 
-cat >"$DEPLOY_DIR/ext/index.html" <<EOF
+cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
 <!DOCTYPE html>
 <html>
 <head>
