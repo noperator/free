@@ -254,8 +254,13 @@ $(cat "$EXT_TEXT_FILE")
                     filteredLines.push(processedLine);
                 }
                 
+                // Collapse multiple consecutive newlines into a single newline
+                let result = filteredLines.join('\n');
+                result = result.replace(/\n\s*\n\s*\n+/g, '\n\n'); // Replace 3+ newlines with 2
+                result = result.replace(/^\s*\n+/g, ''); // Remove leading newlines
+                
                 // Update content
-                content.innerHTML = filteredLines.join('\n');
+                content.innerHTML = result;
             }
             
             // Function to clear all filters
