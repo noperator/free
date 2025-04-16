@@ -61,10 +61,12 @@ cat >"$DEPLOY_DIR/index.html" <<EOF
         pre {
             font-family: monospace;
             white-space: pre-wrap;
+            margin: 0;
         }
         body {
             background: #f5f5f5;
             padding: 20px;
+            margin: 0;
         }
     </style>
 </head>
@@ -88,13 +90,17 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
             font-family: monospace;
             white-space: pre-wrap;
         }
+        pre {
+            margin: 0;
+        }
         body {
             background: #f5f5f5;
             padding: 20px;
+            margin: 0;
         }
         .filter-container {
             margin-bottom: 5px;
-            line-height: 1;
+            line-height: 0.5;
         }
         .filter-row {
             display: flex;
