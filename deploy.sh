@@ -55,6 +55,7 @@ cat >"$DEPLOY_DIR/index.html" <<EOF
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>free</title>
     <style>
         pre {
@@ -80,9 +81,10 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>free (extended)</title>
     <style>
-        pre {
+        pre, .filter-container {
             font-family: monospace;
             white-space: pre-wrap;
         }
@@ -90,12 +92,153 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
             background: #f5f5f5;
             padding: 20px;
         }
+        .filter-container {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .filter-option {
+            margin-right: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        .filter-option input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+        }
+        .filter-option label {
+            margin-left: 8px;
+            cursor: pointer;
+        }
+        @media (max-width: 768px) {
+            .filter-container {
+                padding: 5px 0;
+            }
+            .filter-option {
+                margin-right: 12px;
+                margin-bottom: 12px;
+            }
+        }
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <pre>
+    <div class="filter-container">
+        <div class="filter-option">
+            <input type="checkbox" id="filter-wknd" checked>
+            <label for="filter-wknd">Weekend</label>
+        </div>
+        <div class="filter-option">
+            <input type="checkbox" id="filter-wkday" checked>
+            <label for="filter-wkday">Weekday</label>
+        </div>
+        <div class="filter-option">
+            <input type="checkbox" id="filter-morn" checked>
+            <label for="filter-morn">Morning</label>
+        </div>
+        <div class="filter-option">
+            <input type="checkbox" id="filter-even" checked>
+            <label for="filter-even">Evening</label>
+        </div>
+        <div class="filter-option">
+            <input type="checkbox" id="filter-daytime" checked>
+            <label for="filter-daytime">Daytime</label>
+        </div>
+    </div>
+    <pre id="content">
 $(cat "$EXT_TEXT_FILE")
     </pre>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get filter checkboxes
+            const wkndFilter = document.getElementById('filter-wknd');
+            const wkdayFilter = document.getElementById('filter-wkday');
+            const mornFilter = document.getElementById('filter-morn');
+            const evenFilter = document.getElementById('filter-even');
+            const daytimeFilter = document.getElementById('filter-daytime');
+            
+            // Get content element
+            const content = document.getElementById('content');
+            
+            // Store original content
+            const originalContent = content.innerHTML;
+            
+            // Process the content initially to remove filter keywords
+            function processInitialContent() {
+                const lines = originalContent.split('\n');
+                const processedLines = [];
+                
+                for (let i = 0; i < lines.length; i++) {
+                    let line = lines[i];
+                    
+                    // Remove filter keywords from the line
+                    line = line.replace(/\s+(wknd|morn|even)(\s+(morn|even))?/g, '');
+                    
+                    processedLines.push(line);
+                }
+                
+                return processedLines.join('\n');
+            }
+            
+            // Store processed content (without filter keywords)
+            const processedContent = processInitialContent();
+            content.innerHTML = processedContent;
+            
+            // Function to apply filters
+            function applyFilters() {
+                // Get original content with filter keywords for filtering
+                const lines = originalContent.split('\n');
+                const filteredLines = [];
+                
+                // Process each line
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    let processedLine = line.replace(/\s+(wknd|morn|even)(\s+(morn|even))?/g, '');
+                    
+                    // Skip empty lines
+                    if (line.trim() === '') {
+                        filteredLines.push(processedLine);
+                        continue;
+                    }
+                    
+                    // Check if line has any filter keywords
+                    const hasWknd = line.includes('wknd');
+                    const hasWkday = !hasWknd; // If not weekend, it's a weekday
+                    const hasMorn = line.includes('morn');
+                    const hasEven = line.includes('even');
+                    const hasDaytime = !hasMorn && !hasEven; // If not morning and not evening, it's daytime
+                    
+                    // Skip lines that don't match the current filters
+                    if ((hasWknd && !wkndFilter.checked) ||
+                        (hasWkday && !wkdayFilter.checked) ||
+                        (hasMorn && !mornFilter.checked) ||
+                        (hasEven && !evenFilter.checked) ||
+                        (hasDaytime && !daytimeFilter.checked)) {
+                        continue;
+                    }
+                    
+                    filteredLines.push(processedLine);
+                }
+                
+                // Update content
+                content.innerHTML = filteredLines.join('\n');
+            }
+            
+            // Add event listeners to checkboxes
+            wkndFilter.addEventListener('change', applyFilters);
+            wkdayFilter.addEventListener('change', applyFilters);
+            mornFilter.addEventListener('change', applyFilters);
+            evenFilter.addEventListener('change', applyFilters);
+            daytimeFilter.addEventListener('change', applyFilters);
+            
+            // Initial application of filters
+            applyFilters();
+        });
+    </script>
 </body>
 </html>
 EOF
