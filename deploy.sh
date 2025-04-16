@@ -46,6 +46,7 @@ python3 main.py \
 python3 main.py \
     -s $(date -Idate -d 'yesterday') \
     -w \
+    --days 91 \
     -f $(find "$CAL_DIR" -type f -name '*.ics*') |
     grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+-/_]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
         >>"$EXT_TEXT_FILE"

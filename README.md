@@ -106,4 +106,4 @@ Fri  7 Feb @  1:00 PM –  5:00 PM EST (4h)
 - [x] min duration as cli opt
 - [x] min buffer as cli opt
 - [ ] in web ui, allow specifying local timezone
-- [ ] lookahead as cli opt
+- [x] lookahead as cli opt

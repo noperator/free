@@ -9,7 +9,7 @@ import sys
 import holidays
 from operator import itemgetter
 
-def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime = None) -> List[Tuple[datetime, datetime, str]]:
+def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime = None, days: int = 31) -> List[Tuple[datetime, datetime, str]]:
     """Parse iCal data and return list of (start, end, status) tuples in ET."""
     cal = Calendar.from_ical(ical_data)
     events = []
@@ -18,7 +18,7 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
 
     # Use provided start_date or default to now
     search_start = start_date if start_date else datetime.now(et_tz)
-    cutoff_date = search_start + timedelta(days=31)
+    cutoff_date = search_start + timedelta(days=days)
 
     # Track moved instances by their UID and original date
     moved_instances = {}
@@ -211,7 +211,7 @@ def parse_calendar(ical_data: str, verbose: bool = False, start_date: datetime =
     if verbose:
         et_tz = ZoneInfo("America/New_York")
         now = datetime.now(et_tz)
-        end_date = now + timedelta(days=31)
+        end_date = now + timedelta(days=days)
         us_holidays_list = get_us_holidays(now, end_date)
 
         for holiday_date, holiday_name in us_holidays_list:
@@ -292,7 +292,8 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
                      extended: bool = False,
                      ext_start: time = time(7, 0),
                      ext_end: time = time(20, 0),
-                     min_duration: int = 30) -> List[Tuple[datetime, datetime, bool]]:
+                     min_duration: int = 30,
+                     days: int = 31) -> List[Tuple[datetime, datetime, bool]]:
 
     # print(f"work_start: {work_start}, work_end: {work_end}")
 
@@ -300,7 +301,7 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
     et_tz = ZoneInfo("America/New_York")
     target_timezone = ZoneInfo(target_tz)
     now = start_date if start_date else datetime.now(et_tz)
-    end_date = now + timedelta(days=30)
+    end_date = now + timedelta(days=days)
 
     # Get holidays
     holiday_list = get_us_holidays(now, end_date)
@@ -649,6 +650,8 @@ def main():
                        help='Buffer time in minutes to add before and after busy events (default: 30)')
     parser.add_argument('--min-duration', type=int, default=30,
                        help='Minimum duration in minutes for free windows (default: 30)')
+    parser.add_argument('--days', type=int, default=31,
+                       help='Number of days to look ahead for free windows (default: 31)')
 
     args = parser.parse_args()
 
@@ -700,12 +703,12 @@ def main():
             for file_path in args.files:
                 print(f"reading {file_path}", file=sys.stderr)
                 ical_data = read_ical_from_file(file_path)
-                events = parse_calendar(ical_data, verbose=args.verbose, start_date=start_date)
+                events = parse_calendar(ical_data, verbose=args.verbose, start_date=start_date, days=args.days)
                 all_events.extend(events)
         elif args.urls:
             for url in args.urls:
                 ical_data = fetch_ical_from_url(url)
-                events = parse_calendar(ical_data, verbose=args.verbose, start_date=start_date)
+                events = parse_calendar(ical_data, verbose=args.verbose, start_date=start_date, days=args.days)
                 all_events.extend(events)
 
         free_times = format_windows(
@@ -720,7 +723,8 @@ def main():
                 work_end=work_end,
                 extended=args.extended,
                 ext_start=ext_start,
-                ext_end=ext_end
+                ext_end=ext_end,
+                days=args.days
             ),
             target_tz=args.timezone,
             compare=args.compare
