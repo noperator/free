@@ -219,7 +219,7 @@ $(cat "$EXT_TEXT_FILE")
             content.innerHTML = processedContent;
             
             // Function to apply filters
-            function applyFilters() {
+            function applyFilters(updateUrl = true) {
                 // Get original content with filter keywords for filtering
                 const lines = originalContent.split('\n');
                 const filteredLines = [];
@@ -261,6 +261,70 @@ $(cat "$EXT_TEXT_FILE")
                 
                 // Update content
                 content.innerHTML = result;
+                
+                // Update URL if requested
+                if (updateUrl) {
+                    updateUrlParams();
+                }
+            }
+            
+            // Function to update URL parameters based on filter state
+            function updateUrlParams() {
+                const params = new URLSearchParams();
+                
+                // Build time of day parameter
+                const todFilters = [];
+                if (mornFilter.checked) todFilters.push('morn');
+                if (daytimeFilter.checked) todFilters.push('dytm');
+                if (evenFilter.checked) todFilters.push('even');
+                
+                // Build day of week parameter
+                const dowFilters = [];
+                if (wkdayFilter.checked) dowFilters.push('wkdy');
+                if (wkndFilter.checked) dowFilters.push('wknd');
+                
+                // Only add parameters if they're not all selected (default state)
+                if (todFilters.length > 0 && todFilters.length < 3) {
+                    params.set('tod', todFilters.join(','));
+                }
+                
+                if (dowFilters.length > 0 && dowFilters.length < 2) {
+                    params.set('dow', dowFilters.join(','));
+                }
+                
+                // Update URL without reloading page
+                const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+                window.history.pushState({}, '', newUrl);
+            }
+            
+            // Function to read URL parameters and set filter state
+            function loadFiltersFromUrl() {
+                const params = new URLSearchParams(window.location.search);
+                
+                // Default to all checked
+                wkndFilter.checked = true;
+                wkdayFilter.checked = true;
+                mornFilter.checked = true;
+                evenFilter.checked = true;
+                daytimeFilter.checked = true;
+                
+                // Process time of day filters
+                if (params.has('tod')) {
+                    const todFilters = params.get('tod').split(',');
+                    mornFilter.checked = todFilters.includes('morn');
+                    daytimeFilter.checked = todFilters.includes('dytm');
+                    evenFilter.checked = todFilters.includes('even');
+                }
+                
+                // Process day of week filters
+                if (params.has('dow')) {
+                    const dowFilters = params.get('dow').split(',');
+                    wkdayFilter.checked = dowFilters.includes('wkdy');
+                    wkndFilter.checked = dowFilters.includes('wknd');
+                }
+                
+                // Apply filters without updating URL (to avoid loop)
+                applyFilters(false);
             }
             
             // Function to clear all filters
@@ -281,8 +345,13 @@ $(cat "$EXT_TEXT_FILE")
             daytimeFilter.addEventListener('change', applyFilters);
             clearButton.addEventListener('click', clearFilters);
             
-            // Initial application of filters
-            applyFilters();
+            // Handle back/forward browser navigation
+            window.addEventListener('popstate', function() {
+                loadFiltersFromUrl();
+            });
+            
+            // Initial load of filters from URL
+            loadFiltersFromUrl();
         });
     </script>
 </body>
