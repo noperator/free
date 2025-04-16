@@ -93,13 +93,17 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
             padding: 20px;
         }
         .filter-container {
-            margin-bottom: 20px;
+            margin-bottom: 5px;
+            line-height: 1;
+        }
+        .filter-row {
             display: flex;
             flex-wrap: wrap;
+            margin-bottom: 0;
         }
         .filter-option {
             margin-right: 15px;
-            margin-bottom: 10px;
+            margin-bottom: 0;
             display: flex;
             align-items: center;
         }
@@ -111,13 +115,25 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
             margin-left: 8px;
             cursor: pointer;
         }
+        .clear-button {
+            background: none;
+            border: none;
+            font-family: monospace;
+            cursor: pointer;
+            text-decoration: underline;
+            padding: 0;
+            margin-top: 0;
+        }
+        #content {
+            margin-top: 3px;
+        }
         @media (max-width: 768px) {
             .filter-container {
-                padding: 5px 0;
+                padding: 0;
             }
             .filter-option {
                 margin-right: 12px;
-                margin-bottom: 12px;
+                margin-bottom: 0;
             }
         }
         .hidden {
@@ -127,25 +143,32 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
 </head>
 <body>
     <div class="filter-container">
-        <div class="filter-option">
-            <input type="checkbox" id="filter-wknd" checked>
-            <label for="filter-wknd">Weekend</label>
+        <div class="filter-row">
+            <div class="filter-option">
+                <input type="checkbox" id="filter-morn" checked>
+                <label for="filter-morn">morning</label>
+            </div>
+            <div class="filter-option">
+                <input type="checkbox" id="filter-daytime" checked>
+                <label for="filter-daytime">daytime</label>
+            </div>
+            <div class="filter-option">
+                <input type="checkbox" id="filter-even" checked>
+                <label for="filter-even">evening</label>
+            </div>
         </div>
-        <div class="filter-option">
-            <input type="checkbox" id="filter-wkday" checked>
-            <label for="filter-wkday">Weekday</label>
+        <div class="filter-row">
+            <div class="filter-option">
+                <input type="checkbox" id="filter-wkday" checked>
+                <label for="filter-wkday">weekday</label>
+            </div>
+            <div class="filter-option">
+                <input type="checkbox" id="filter-wknd" checked>
+                <label for="filter-wknd">weekend</label>
+            </div>
         </div>
-        <div class="filter-option">
-            <input type="checkbox" id="filter-morn" checked>
-            <label for="filter-morn">Morning</label>
-        </div>
-        <div class="filter-option">
-            <input type="checkbox" id="filter-even" checked>
-            <label for="filter-even">Evening</label>
-        </div>
-        <div class="filter-option">
-            <input type="checkbox" id="filter-daytime" checked>
-            <label for="filter-daytime">Daytime</label>
+        <div class="filter-row">
+            <button id="clear-filters" class="clear-button">clear</button>
         </div>
     </div>
     <pre id="content">
@@ -160,6 +183,7 @@ $(cat "$EXT_TEXT_FILE")
             const mornFilter = document.getElementById('filter-morn');
             const evenFilter = document.getElementById('filter-even');
             const daytimeFilter = document.getElementById('filter-daytime');
+            const clearButton = document.getElementById('clear-filters');
             
             // Get content element
             const content = document.getElementById('content');
@@ -228,12 +252,23 @@ $(cat "$EXT_TEXT_FILE")
                 content.innerHTML = filteredLines.join('\n');
             }
             
+            // Function to clear all filters
+            function clearFilters() {
+                wkndFilter.checked = false;
+                wkdayFilter.checked = false;
+                mornFilter.checked = false;
+                evenFilter.checked = false;
+                daytimeFilter.checked = false;
+                applyFilters();
+            }
+            
             // Add event listeners to checkboxes
             wkndFilter.addEventListener('change', applyFilters);
             wkdayFilter.addEventListener('change', applyFilters);
             mornFilter.addEventListener('change', applyFilters);
             evenFilter.addEventListener('change', applyFilters);
             daytimeFilter.addEventListener('change', applyFilters);
+            clearButton.addEventListener('click', clearFilters);
             
             // Initial application of filters
             applyFilters();
