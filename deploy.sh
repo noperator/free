@@ -53,17 +53,13 @@ rm "$CAL_DIR"/* 2>/dev/null
 
 # Download calendar files
 if $is_github_action; then
-  # In GitHub Actions, CAL_URLS comes from the secret as a multi-line string
-  # We need to convert it to an array
-  IFS=$'\n' read -d '' -ra CALENDAR_URLS <<< "$CAL_URLS"
-  for CAL_URL in "${CALENDAR_URLS[@]}"; do
-    # Remove any surrounding quotes if present
-    CAL_URL=$(echo "$CAL_URL" | sed -e "s/^['\"]//;s/['\"]$//")
-    wget -P "$CAL_DIR" "$CAL_URL"
-  done
+  # In GitHub Actions, we're skipping this step because files are already downloaded
+  # in the workflow before this script runs
+  echo "Running in GitHub Actions - calendar files already downloaded"
 else
   # In local environment, CAL_URLS is already an array from .env
   for CAL_URL in "${CAL_URLS[@]}"; do
+    echo "Downloading: $CAL_URL"
     wget -P "$CAL_DIR" "$CAL_URL"
   done
 fi
