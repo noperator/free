@@ -107,3 +107,4 @@ Fri  7 Feb @  1:00 PM –  5:00 PM EST (4h)
 - [x] min buffer as cli opt
 - [ ] in web ui, allow specifying local timezone
 - [x] lookahead as cli opt
+- [ ] containerize
