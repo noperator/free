@@ -6,6 +6,9 @@ on:
     - cron: "0 4 * * *"
   workflow_dispatch:
     # Allow manual trigger from GitHub UI
+  pull_request:
+    branches:
+      - workflow/fixup-github-workflow-main-deploy-script-v2 # tmp
 
 jobs:
   deploy:
@@ -14,6 +17,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
+      GITHUB_ACTIONS: true
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -47,13 +51,48 @@ jobs:
       - name: Download calendar files
         run: |
           mkdir -p cal
-          # Use each URL from the secret directly
-          echo "${{ secrets.CAL_URL_1 }}" | xargs wget -P cal
-          echo "${{ secrets.CAL_URL_2 }}" | xargs wget -P cal
-          # Add more URLs as needed
+
+          # First calendar - check if it exists and is valid
+          if [ -n "${{ secrets.CAL_URL_1 }}" ]; then
+            echo "Downloading first calendar..."
+            if curl --output /dev/null --silent --head --fail "${{ secrets.CAL_URL_1 }}"; then
+              wget -O cal/calendar1.ics "${{ secrets.CAL_URL_1 }}"
+              echo "First calendar downloaded successfully"
+            else
+              echo "Warning: First calendar URL returned an error."
+            fi
+          fi
+
+          # Second calendar - check if it exists and is valid
+          if [ -n "${{ secrets.CAL_URL_2 }}" ]; then
+            echo "Downloading second calendar..."
+            if curl --output /dev/null --silent --head --fail "${{ secrets.CAL_URL_2 }}"; then
+              wget -O cal/calendar2.ics "${{ secrets.CAL_URL_2 }}"
+              echo "Second calendar downloaded successfully"
+            else
+              echo "Warning: Second calendar URL returned an error."
+            fi
+          fi
+
+          # Additional calendars can be added here using the same pattern
+
+          # Verify we have at least one calendar file
+          if [ "$(find cal -name '*.ics' | wc -l)" -eq 0 ]; then
+            echo "Error: No valid calendar files were downloaded."
+            exit 1
+          fi
+
+          # List downloaded calendars
+          echo "Downloaded calendar files:"
+          ls -la cal/
 
       - name: Make deploy script executable
         run: chmod +x deploy.sh
 
       - name: Run deploy script
         run: ./deploy.sh
+
+      - name: Verify deployment
+        run: |
+          echo "Deployment completed."
+          echo "Free time finder is now available at: https://${{ secrets.PROJECT_NAME }}.pages.dev"
