@@ -133,3 +133,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 pytestdebug.log
+*ext.txt
+*free.txt
+deploy/*
+cal/basic.ics

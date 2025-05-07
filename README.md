@@ -1,5 +1,19 @@
 # free
 
+- [free](#free)
+  - [Description](#description)
+  - [Getting started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Install](#install)
+    - [Configure](#configure)
+    - [Usage](#usage)
+  - [Back matter](#back-matter)
+    - [See also](#see-also)
+    - [To-do](#to-do)
+  - [Automated Deployment](#automated-deployment)
+    - [GitHub Actions Setup](#github-actions-setup)
+  - [Renovate Dependency Management](#renovate-dependency-management)
+
 ## Description
 
 Cross-reference multiple calendars to find free time slots.
@@ -18,24 +32,52 @@ git clone https://github.com/noperator/free
 
 ### Configure
 
-Install dependencies.
+Install Node.js and npm, then install the required dependencies:
 
+- [Node.js](https://nodejs.org/en/download/)
+
+```bash
+npm -v
+node -v
+
+# install wrangler
+npm install -g wrangler
 ```
+
+Activate the virtual environment and install dependencies:
+
+```bash
 python3 -m venv venv
 source venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
-If you want to use `deploy.sh` (for Cloudflare Pages), fill out `.env`.
+If you want to use [`deploy.sh`](./deploy.sh) (for Cloudflare Pages), fill out `.env`.
 
-```
+```bash
 CLOUDFLARE_ACCOUNT_ID=<>
 CLOUDFLARE_API_TOKEN=<>
-PROJECT_NAME=<>
+PROJECT_NAME=<> # not including the .dev
 CAL_URLS=(
     'https://calendar.google.com/calendar/ical/<ACCOUNT>/<CALENDAR>/basic.ics'
     'https://outlook.office365.com/owa/calendar/<ACCOUNT>/<CALENDAR>/calendar.ics'
 )
+```
+
+There are two ways to run the script, depending on OS:
+
+- [`deploy.sh`](./deploy.sh) (for Cloudflare Pages)
+- [`deploy_mac.sh`](./deploy_mac.sh) (for Cloudflare Pages - macOS)
+- [`main.py`](./main.py) (for local testing)
+
+The main difference is that `deploy.sh` uses `date -Idate` to get the current date, while `deploy_mac.sh` uses `date -v-1d` (macOS grep has slightly different regular expression syntax).
+
+```bash
+# Linux version
+date -Idate -d 'yesterday'
+
+# macOS version
+date -v-1d +"%Y-%m-%d"
 ```
 
 ### Usage
@@ -139,7 +181,7 @@ Create the following secrets:
     'https://outlook.office365.com/owa/calendar/your-account/calendar.ics'
     ```
 
-## Renovate
+## Renovate Dependency Management
 
 Renovate is used to handle dependency management within this repository using the "Hosted GitHub.com App" method for personal account use. If you want to run Renovate on this repository, you need to follow these steps:
 
