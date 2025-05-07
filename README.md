@@ -108,3 +108,33 @@ Fri  7 Feb @  1:00 PM –  5:00 PM EST (4h)
 - [ ] in web ui, allow specifying local timezone
 - [x] lookahead as cli opt
 - [ ] containerize
+
+## Automated Deployment
+
+This repository includes GitHub Actions workflow to automatically deploy your calendar:
+
+### GitHub Actions Setup
+
+1. Fork or clone this repository
+2. Go to your repository's Settings > Secrets and variables > Actions
+3. Add the following secrets:
+   - `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
+   - `CLOUDFLARE_API_TOKEN`: Your Cloudflare API token
+   - `PROJECT_NAME`: Your Cloudflare Pages project name
+   - `CAL_URLS`: Your calendar URLs (one per line, enclosed in single quotes)
+
+The workflow will run automatically every day at 4:00 AM UTC, or you can trigger it manually from the Actions tab.
+
+In your GitHub repository:
+
+Go to Settings > Secrets and variables > Actions
+Create the following secrets:
+- `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
+- `CLOUDFLARE_API_TOKEN`: Your Cloudflare API token
+- `PROJECT_NAME`: Your Cloudflare Pages project name
+- `CAL_URLS`: Your calendar URLs as a formatted string (maintain proper quoting)
+  - Example for the `CAL_URLS` secret:
+    ```bash
+    'https://calendar.google.com/calendar/ical/your-account/basic.ics'
+    'https://outlook.office365.com/owa/calendar/your-account/calendar.ics'
+    ```
