@@ -1,11 +1,31 @@
 #!/bin/bash
 
+# Original cron comment for reference
 # */5 * * * * /bin/bash -c '/home/noperator/free/deploy.sh &> /home/noperator/free/deploy.log'
 
-export PATH="$(find "$HOME/.nvm/versions/node" -maxdepth 1 -type d | sort -V | tail -n 1)/bin:$PATH"
+# Determine execution environment
+is_github_action=false
+if [ -n "$GITHUB_ACTIONS" ]; then
+  is_github_action=true
+  echo "Running in GitHub Actions environment"
+else
+  echo "Running in local environment"
+  # Only set PATH for local environment
+  export PATH="$(find "$HOME/.nvm/versions/node" -maxdepth 1 -type d | sort -V | tail -n 1)/bin:$PATH"
+fi
 
+# Change to script directory
 cd "$(dirname "$0")"
 
+# Load environment variables
+if [ -f .env ]; then
+  source .env
+else
+  echo "Error: .env file not found"
+  exit 1
+fi
+
+# Setup file and directory variables
 TEXT_FILE='free.txt'
 EXT_TEXT_FILE='ext.txt'
 DEPLOY_DIR='deploy'
@@ -14,16 +34,16 @@ DATE=$(date -Iseconds -u | sed -E 's/\+00:00/Z/')
 echo "$DATE"
 
 echo -e "last updated $DATE\n" >"$TEXT_FILE"
-
 echo -e "last updated $DATE\n" >"$EXT_TEXT_FILE"
 
+# Generate EXT_DIR if not present
 if ! grep -q "^EXT_DIR=" .env; then
     echo "EXT_DIR=$(LC_ALL=C base64 </dev/urandom | tr -d '/+=' | head -c 32)" >>.env
+    source .env # Re-source to get the new value
     echo "Generated new random EXT_DIR: $EXT_DIR"
 fi
 
-source .env
-
+# Setup directories
 mkdir -p "$DEPLOY_DIR"
 mkdir -p "$DEPLOY_DIR/$EXT_DIR"
 mkdir -p "$CAL_DIR"
@@ -31,18 +51,38 @@ rm "$DEPLOY_DIR"/* 2>/dev/null
 rm "$DEPLOY_DIR/$EXT_DIR"/* 2>/dev/null
 rm "$CAL_DIR"/* 2>/dev/null
 
-for CAL_URL in "${CAL_URLS[@]}"; do
+# Download calendar files
+if $is_github_action; then
+  # In GitHub Actions, CAL_URLS comes from the secret as a multi-line string
+  # We need to convert it to an array
+  IFS=$'\n' read -d '' -ra CALENDAR_URLS <<< "$CAL_URLS"
+  for CAL_URL in "${CALENDAR_URLS[@]}"; do
+    # Remove any surrounding quotes if present
+    CAL_URL=$(echo "$CAL_URL" | sed -e "s/^['\"]//;s/['\"]$//")
     wget -P "$CAL_DIR" "$CAL_URL"
-done
+  done
+else
+  # In local environment, CAL_URLS is already an array from .env
+  for CAL_URL in "${CAL_URLS[@]}"; do
+    wget -P "$CAL_DIR" "$CAL_URL"
+  done
+fi
 
-source venv/bin/activate
+# Activate Python virtual environment
+if $is_github_action; then
+  source venv/bin/activate || echo "Failed to activate venv, continuing anyway"
+else
+  source venv/bin/activate
+fi
 
+# Generate standard free time
 python3 main.py \
     -s $(date -Idate -d 'yesterday') \
     -f $(find "$CAL_DIR" -type f -name '*.ics*') |
     grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+-/_]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)' \
         >>"$TEXT_FILE"
 
+# Generate extended free time
 python3 main.py \
     -s $(date -Idate -d 'yesterday') \
     -w \
@@ -51,6 +91,7 @@ python3 main.py \
     grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+-/_]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
         >>"$EXT_TEXT_FILE"
 
+# Generate HTML files
 cat >"$DEPLOY_DIR/index.html" <<EOF
 <!DOCTYPE html>
 <html>
@@ -191,58 +232,58 @@ $(cat "$EXT_TEXT_FILE")
             const evenFilter = document.getElementById('filter-even');
             const daytimeFilter = document.getElementById('filter-daytime');
             const clearButton = document.getElementById('clear-filters');
-            
+
             // Get content element
             const content = document.getElementById('content');
-            
+
             // Store original content
             const originalContent = content.innerHTML;
-            
+
             // Process the content initially to remove filter keywords
             function processInitialContent() {
                 const lines = originalContent.split('\n');
                 const processedLines = [];
-                
+
                 for (let i = 0; i < lines.length; i++) {
                     let line = lines[i];
-                    
+
                     // Remove filter keywords from the line
                     line = line.replace(/\s+(wknd|morn|even)(\s+(morn|even))?/g, '');
-                    
+
                     processedLines.push(line);
                 }
-                
+
                 return processedLines.join('\n');
             }
-            
+
             // Store processed content (without filter keywords)
             const processedContent = processInitialContent();
             content.innerHTML = processedContent;
-            
+
             // Function to apply filters
             function applyFilters(updateUrl = true) {
                 // Get original content with filter keywords for filtering
                 const lines = originalContent.split('\n');
                 const filteredLines = [];
-                
+
                 // Process each line
                 for (let i = 0; i < lines.length; i++) {
                     const line = lines[i];
                     let processedLine = line.replace(/\s+(wknd|morn|even)(\s+(morn|even))?/g, '');
-                    
+
                     // Skip empty lines
                     if (line.trim() === '') {
                         filteredLines.push(processedLine);
                         continue;
                     }
-                    
+
                     // Check if line has any filter keywords
                     const hasWknd = line.includes('wknd');
                     const hasWkday = !hasWknd; // If not weekend, it's a weekday
                     const hasMorn = line.includes('morn');
                     const hasEven = line.includes('even');
                     const hasDaytime = !hasMorn && !hasEven; // If not morning and not evening, it's daytime
-                    
+
                     // Skip lines that don't match the current filters
                     if ((hasWknd && !wkndFilter.checked) ||
                         (hasWkday && !wkdayFilter.checked) ||
@@ -251,64 +292,64 @@ $(cat "$EXT_TEXT_FILE")
                         (hasDaytime && !daytimeFilter.checked)) {
                         continue;
                     }
-                    
+
                     filteredLines.push(processedLine);
                 }
-                
+
                 // Collapse multiple consecutive newlines into a single newline
                 let result = filteredLines.join('\n');
                 result = result.replace(/\n\s*\n\s*\n+/g, '\n\n'); // Replace 3+ newlines with 2
                 result = result.replace(/^\s*\n+/g, ''); // Remove leading newlines
-                
+
                 // Update content
                 content.innerHTML = result;
-                
+
                 // Update URL if requested
                 if (updateUrl) {
                     updateUrlParams();
                 }
             }
-            
+
             // Function to update URL parameters based on filter state
             function updateUrlParams() {
                 const params = new URLSearchParams();
-                
+
                 // Build time of day parameter
                 const todFilters = [];
                 if (mornFilter.checked) todFilters.push('morn');
                 if (daytimeFilter.checked) todFilters.push('dytm');
                 if (evenFilter.checked) todFilters.push('even');
-                
+
                 // Build day of week parameter
                 const dowFilters = [];
                 if (wkdayFilter.checked) dowFilters.push('wkdy');
                 if (wkndFilter.checked) dowFilters.push('wknd');
-                
+
                 // Only add parameters if they're not all selected (default state)
                 if (todFilters.length > 0 && todFilters.length < 3) {
                     params.set('tod', todFilters.join(','));
                 }
-                
+
                 if (dowFilters.length > 0 && dowFilters.length < 2) {
                     params.set('dow', dowFilters.join(','));
                 }
-                
+
                 // Update URL without reloading page
                 const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
                 window.history.pushState({}, '', newUrl);
             }
-            
+
             // Function to read URL parameters and set filter state
             function loadFiltersFromUrl() {
                 const params = new URLSearchParams(window.location.search);
-                
+
                 // Default to all checked
                 wkndFilter.checked = true;
                 wkdayFilter.checked = true;
                 mornFilter.checked = true;
                 evenFilter.checked = true;
                 daytimeFilter.checked = true;
-                
+
                 // Process time of day filters
                 if (params.has('tod')) {
                     const todFilters = params.get('tod').split(',');
@@ -316,18 +357,18 @@ $(cat "$EXT_TEXT_FILE")
                     daytimeFilter.checked = todFilters.includes('dytm');
                     evenFilter.checked = todFilters.includes('even');
                 }
-                
+
                 // Process day of week filters
                 if (params.has('dow')) {
                     const dowFilters = params.get('dow').split(',');
                     wkdayFilter.checked = dowFilters.includes('wkdy');
                     wkndFilter.checked = dowFilters.includes('wknd');
                 }
-                
+
                 // Apply filters without updating URL (to avoid loop)
                 applyFilters(false);
             }
-            
+
             // Function to clear all filters
             function clearFilters() {
                 wkndFilter.checked = false;
@@ -337,7 +378,7 @@ $(cat "$EXT_TEXT_FILE")
                 daytimeFilter.checked = false;
                 applyFilters();
             }
-            
+
             // Add event listeners to checkboxes
             wkndFilter.addEventListener('change', applyFilters);
             wkdayFilter.addEventListener('change', applyFilters);
@@ -345,12 +386,12 @@ $(cat "$EXT_TEXT_FILE")
             evenFilter.addEventListener('change', applyFilters);
             daytimeFilter.addEventListener('change', applyFilters);
             clearButton.addEventListener('click', clearFilters);
-            
+
             // Handle back/forward browser navigation
             window.addEventListener('popstate', function() {
                 loadFiltersFromUrl();
             });
-            
+
             // Initial load of filters from URL
             loadFiltersFromUrl();
         });
@@ -359,4 +400,14 @@ $(cat "$EXT_TEXT_FILE")
 </html>
 EOF
 
+# Deploy to Cloudflare Pages
+if $is_github_action; then
+  # Install wrangler if needed
+  if ! command -v wrangler &> /dev/null; then
+    echo "Installing wrangler..."
+    npm install -g wrangler
+  fi
+fi
+
+# Deploy using wrangler
 wrangler pages deploy "$DEPLOY_DIR" --project-name="$PROJECT_NAME"
