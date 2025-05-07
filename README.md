@@ -169,17 +169,15 @@ The workflow will run automatically every day at 4:00 AM UTC, or you can trigger
 
 In your GitHub repository:
 
-Go to Settings > Secrets and variables > Actions
-Create the following secrets:
+- Go to Settings > Secrets and variables > Actions
+  - Create the following secrets:
+
 - `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
 - `CLOUDFLARE_API_TOKEN`: Your Cloudflare API token
 - `PROJECT_NAME`: Your Cloudflare Pages project name
-- `CAL_URLS`: Your calendar URLs as a formatted string (maintain proper quoting)
-  - Example for the `CAL_URLS` secret:
-    ```bash
-    'https://calendar.google.com/calendar/ical/your-account/basic.ics'
-    'https://outlook.office365.com/owa/calendar/your-account/calendar.ics'
-    ```
+- `CAL_URL_1`: Your first calendar URL
+- `CAL_URL_2`: Your second calendar URL
+- `CAL_URL_3`: Your third calendar URL
 
 ## Renovate Dependency Management
 
