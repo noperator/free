@@ -138,3 +138,11 @@ Create the following secrets:
     'https://calendar.google.com/calendar/ical/your-account/basic.ics'
     'https://outlook.office365.com/owa/calendar/your-account/calendar.ics'
     ```
+
+## Renovate
+
+Renovate is used to handle dependency management within this repository using the "Hosted GitHub.com App" method for personal account use. If you want to run Renovate on this repository, you need to follow these steps:
+
+1. Install [Renovate](https://docs.renovatebot.com/getting-started/installing-onboarding/) in GitHub.
+2. When configuring the [Renovate application](https://github.com/apps/renovate), ensure it is set to use this repository.
+3. Check your [Mend Developer account](https://developer.mend.io/github/) for any updates or changes.
