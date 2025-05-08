@@ -37,9 +37,13 @@ echo -e "last updated $DATE\n" >"$TEXT_FILE"
 echo -e "last updated $DATE\n" >"$EXT_TEXT_FILE"
 
 # Generate EXT_DIR if not present
-if ! grep -q "^EXT_DIR=" .env; then
-    echo "EXT_DIR=$(LC_ALL=C base64 </dev/urandom | tr -d '/+=' | head -c 32)" >>.env
-    source .env # Re-source to get the new value
+if [ -z "$EXT_DIR" ]; then
+    if $is_github_action; then
+        EXT_DIR=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    else
+        EXT_DIR=$(LC_ALL=C base64 </dev/urandom | tr -d '/+=' | head -c 32)
+    fi
+    echo "EXT_DIR=$EXT_DIR" >> .env
     echo "Generated new random EXT_DIR: $EXT_DIR"
 fi
 
@@ -47,15 +51,16 @@ fi
 mkdir -p "$DEPLOY_DIR"
 mkdir -p "$DEPLOY_DIR/$EXT_DIR"
 mkdir -p "$CAL_DIR"
-rm "$DEPLOY_DIR"/* 2>/dev/null
-rm "$DEPLOY_DIR/$EXT_DIR"/* 2>/dev/null
+rm -f "$DEPLOY_DIR"/* 2>/dev/null
+rm -f "$DEPLOY_DIR/$EXT_DIR"/* 2>/dev/null
 rm "$CAL_DIR"/* 2>/dev/null
 
 # Download calendar files
 if $is_github_action; then
-  # In GitHub Actions, we're skipping this step because files are already downloaded
-  # in the workflow before this script runs
   echo "Running in GitHub Actions - calendar files already downloaded"
+  # List what calendar files we have
+  echo "Found these calendar files:"
+  ls -la "$CAL_DIR"
 else
   # In local environment, CAL_URLS is already an array from .env
   for CAL_URL in "${CAL_URLS[@]}"; do
@@ -71,19 +76,29 @@ else
   source venv/bin/activate
 fi
 
+# Get yesterday's date in ISO format (Linux compatible)
+YESTERDAY=$(date -d "yesterday" +"%Y-%m-%d")
+
+# Check if we have any calendar files
+CAL_FILES=$(find "$CAL_DIR" -type f -name '*.ics*')
+if [ -z "$CAL_FILES" ]; then
+  echo "Error: No calendar files found in $CAL_DIR directory"
+  exit 1
+fi
+
 # Generate standard free time
 python3 main.py \
-    -s $(date -Idate -d 'yesterday') \
-    -f $(find "$CAL_DIR" -type f -name '*.ics*') |
+    -s "$YESTERDAY" \
+    -f $CAL_FILES |
     grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+-/_]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)' \
         >>"$TEXT_FILE"
 
 # Generate extended free time
 python3 main.py \
-    -s $(date -Idate -d 'yesterday') \
+    -s "$YESTERDAY" \
     -w \
     --days 91 \
-    -f $(find "$CAL_DIR" -type f -name '*.ics*') |
+    -f $CAL_FILES |
     grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+-/_]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
         >>"$EXT_TEXT_FILE"
 

@@ -157,6 +157,17 @@ This repository includes GitHub Actions workflow to automatically deploy your ca
 
 ### GitHub Actions Setup
 
+*If you do not want to use GitHub Actions, you can skip this section and disable the workflow.*
+
+1.  **Navigate to your repository** on GitHub.com.
+2.  Click on the **"Actions"** tab.
+3.  In the left sidebar, you'll see a list of your workflow files. **Click on the name of the workflow** you want to disable.
+4.  You'll see a list of workflow runs. Above the runs, click the **"..." (ellipsis) button** on the right side.
+5.  Select **"Disable workflow"** from the dropdown menu.
+6.  Confirm that you want to disable it.
+
+*If you want to use GitHub Actions to automate the deployment of your calendar, follow these steps:*
+
 1. Fork or clone this repository
 2. Go to your repository's Settings > Secrets and variables > Actions
 3. Add the following secrets:
@@ -164,6 +175,9 @@ This repository includes GitHub Actions workflow to automatically deploy your ca
    - `CLOUDFLARE_API_TOKEN`: Your Cloudflare API token
    - `PROJECT_NAME`: Your Cloudflare Pages project name
    - `CAL_URLS`: Your calendar URLs (one per line, enclosed in single quotes)
+4. Uncomment the workflow cron job in [`.github/workflows/deploy.yml`](https://github.com/GangGreenTemperTatum/free/blob/05a8eb59daea722fd2ad3326ea15eda6bae0e84e/.github/workflows/deploy-calendar.yml#L6) to enable the scheduled deployment. The cron job is set to run every day at 4:00 AM UTC. You can adjust the schedule as needed.
+
+```yaml
 
 The workflow will run automatically every day at 4:00 AM UTC, or you can trigger it manually from the Actions tab.
 
