@@ -1,5 +1,19 @@
 # free
 
+- [free](#free)
+  - [Description](#description)
+  - [Getting started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Install](#install)
+    - [Configure](#configure)
+    - [Usage](#usage)
+  - [Back matter](#back-matter)
+    - [See also](#see-also)
+    - [To-do](#to-do)
+  - [Automated Deployment](#automated-deployment)
+    - [GitHub Actions Setup](#github-actions-setup)
+  - [Renovate Dependency Management](#renovate-dependency-management)
+
 ## Description
 
 Cross-reference multiple calendars to find free time slots.
@@ -18,24 +32,52 @@ git clone https://github.com/noperator/free
 
 ### Configure
 
-Install dependencies.
+Install Node.js and npm, then install the required dependencies:
 
+- [Node.js](https://nodejs.org/en/download/)
+
+```bash
+npm -v
+node -v
+
+# install wrangler
+npm install -g wrangler
 ```
+
+Activate the virtual environment and install dependencies:
+
+```bash
 python3 -m venv venv
 source venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
-If you want to use `deploy.sh` (for Cloudflare Pages), fill out `.env`.
+If you want to use [`deploy.sh`](./deploy.sh) (for Cloudflare Pages), fill out `.env`.
 
-```
+```bash
 CLOUDFLARE_ACCOUNT_ID=<>
 CLOUDFLARE_API_TOKEN=<>
-PROJECT_NAME=<>
+PROJECT_NAME=<> # not including the .dev
 CAL_URLS=(
     'https://calendar.google.com/calendar/ical/<ACCOUNT>/<CALENDAR>/basic.ics'
     'https://outlook.office365.com/owa/calendar/<ACCOUNT>/<CALENDAR>/calendar.ics'
 )
+```
+
+There are two ways to run the script, depending on OS:
+
+- [`deploy.sh`](./deploy.sh) (for Cloudflare Pages)
+- [`deploy_mac.sh`](./deploy_mac.sh) (for Cloudflare Pages - macOS)
+- [`main.py`](./main.py) (for local testing)
+
+The main difference is that `deploy.sh` uses `date -Idate` to get the current date, while `deploy_mac.sh` uses `date -v-1d` (macOS grep has slightly different regular expression syntax).
+
+```bash
+# Linux version
+date -Idate -d 'yesterday'
+
+# macOS version
+date -v-1d +"%Y-%m-%d"
 ```
 
 ### Usage
@@ -108,3 +150,53 @@ Fri  7 Feb @  1:00 PM –  5:00 PM EST (4h)
 - [ ] in web ui, allow specifying local timezone
 - [x] lookahead as cli opt
 - [ ] containerize
+
+## Automated Deployment
+
+This repository includes GitHub Actions workflow to automatically deploy your calendar:
+
+### GitHub Actions Setup
+
+*If you do not want to use GitHub Actions, you can skip this section and disable the workflow.*
+
+1.  **Navigate to your repository** on GitHub.com.
+2.  Click on the **"Actions"** tab.
+3.  In the left sidebar, you'll see a list of your workflow files. **Click on the name of the workflow** you want to disable.
+4.  You'll see a list of workflow runs. Above the runs, click the **"..." (ellipsis) button** on the right side.
+5.  Select **"Disable workflow"** from the dropdown menu.
+6.  Confirm that you want to disable it.
+
+*If you want to use GitHub Actions to automate the deployment of your calendar, follow these steps:*
+
+1. Fork or clone this repository
+2. Go to your repository's Settings > Secrets and variables > Actions
+3. Add the following secrets:
+   - `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
+   - `CLOUDFLARE_API_TOKEN`: Your Cloudflare API token
+   - `PROJECT_NAME`: Your Cloudflare Pages project name
+   - `CAL_URLS`: Your calendar URLs (one per line, enclosed in single quotes)
+4. Uncomment the workflow cron job in [`.github/workflows/deploy.yml`](https://github.com/GangGreenTemperTatum/free/blob/05a8eb59daea722fd2ad3326ea15eda6bae0e84e/.github/workflows/deploy-calendar.yml#L6) to enable the scheduled deployment. The cron job is set to run every day at 4:00 AM UTC. You can adjust the schedule as needed.
+
+```yaml
+
+The workflow will run automatically every day at 4:00 AM UTC, or you can trigger it manually from the Actions tab.
+
+In your GitHub repository:
+
+- Go to Settings > Secrets and variables > Actions
+  - Create the following secrets:
+
+- `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
+- `CLOUDFLARE_API_TOKEN`: Your Cloudflare API token
+- `PROJECT_NAME`: Your Cloudflare Pages project name
+- `CAL_URL_1`: Your first calendar URL
+- `CAL_URL_2`: Your second calendar URL
+- `CAL_URL_3`: Your third calendar URL
+
+## Renovate Dependency Management
+
+Renovate is used to handle dependency management within this repository using the "Hosted GitHub.com App" method for personal account use. If you want to run Renovate on this repository, you need to follow these steps:
+
+1. Install [Renovate](https://docs.renovatebot.com/getting-started/installing-onboarding/) in GitHub.
+2. When configuring the [Renovate application](https://github.com/apps/renovate), ensure it is set to use this repository.
+3. Check your [Mend Developer account](https://developer.mend.io/github/) for any updates or changes.
