@@ -24,19 +24,32 @@ Install dependencies.
 python3 -m venv venv
 source venv/bin/activate
 python3 -m pip install -r requirements.txt
+npm install -g wrangler # for Cloudflare Pages
 ```
+
+#### Cloudflare Pages
 
 If you want to use `deploy.sh` (for Cloudflare Pages), fill out `.env`.
 
 ```
 CLOUDFLARE_ACCOUNT_ID=<>
 CLOUDFLARE_API_TOKEN=<>
-PROJECT_NAME=<>
+PROJECT_NAME=<> # (not including ".dev")
 CAL_URLS=(
     'https://calendar.google.com/calendar/ical/<ACCOUNT>/<CALENDAR>/basic.ics'
     'https://outlook.office365.com/owa/calendar/<ACCOUNT>/<CALENDAR>/calendar.ics'
 )
 ```
+
+#### GitHub Actions
+
+To deploy automatically via GitHub Actions, add these secrets to your repository:
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN`
+- `PROJECT_NAME`
+- `CAL_URLS` (one URL per line)
+
+Uncomment the cron schedule in `.github/workflows/deploy-calendar.yml` to enable daily deployment.
 
 ### Usage
 

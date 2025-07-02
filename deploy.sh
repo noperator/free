@@ -2,7 +2,10 @@
 
 # */5 * * * * /bin/bash -c '/home/noperator/free/deploy.sh &> /home/noperator/free/deploy.log'
 
-export PATH="$(find "$HOME/.nvm/versions/node" -maxdepth 1 -type d | sort -V | tail -n 1)/bin:$PATH"
+if [[ "$OSTYPE" == 'linux-gnu' ]]; then
+    # Sometimes wrangler will complain if it can't find latest Node.js
+    export PATH="$($(which find) "$HOME/.nvm/versions/node" -maxdepth 1 -type d | sort -V | tail -n 1)/bin:$PATH"
+fi
 
 cd "$(dirname "$0")"
 
@@ -31,24 +34,43 @@ rm "$DEPLOY_DIR"/* 2>/dev/null
 rm "$DEPLOY_DIR/$EXT_DIR"/* 2>/dev/null
 rm "$CAL_DIR"/* 2>/dev/null
 
-for CAL_URL in "${CAL_URLS[@]}"; do
-    wget -P "$CAL_DIR" "$CAL_URL"
-done
+# Handle calendar downloads for both local and GitHub Actions
+if [[ -n "$GITHUB_ACTIONS" ]]; then
+    # In GitHub Actions, CAL_URLS comes from the secret as a multi-line string
+    IFS=$'\n' read -d '' -ra CALENDAR_URLS <<<"$CAL_URLS"
+    for CAL_URL in "${CALENDAR_URLS[@]}"; do
+        # Remove any surrounding quotes if present
+        CAL_URL=$(echo "$CAL_URL" | sed -e "s/^['\"]//;s/['\"]$//")
+        wget -P "$CAL_DIR" "$CAL_URL"
+    done
+else
+    # Local environment - CAL_URLS is an array from .env
+    for CAL_URL in "${CAL_URLS[@]}"; do
+        wget -P "$CAL_DIR" "$CAL_URL"
+    done
+fi
 
 source venv/bin/activate
 
+# Cross-platform yesterday date
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    YESTERDAY=$($(which date) -v -1d -Idate)
+else
+    YESTERDAY=$($(which date) -d 'yesterday' -Idate)
+fi
+
 python3 main.py \
-    -s $(date -Idate -d 'yesterday') \
-    -f $(find "$CAL_DIR" -type f -name '*.ics*') |
-    grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+-/_]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)' \
+    -s "$YESTERDAY" \
+    -f $($(which find) "$CAL_DIR" -type f -name '*.ics*') |
+    grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)' \
         >>"$TEXT_FILE"
 
 python3 main.py \
-    -s $(date -Idate -d 'yesterday') \
+    -s "$YESTERDAY" \
     -w \
     --days 91 \
-    -f $(find "$CAL_DIR" -type f -name '*.ics*') |
-    grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+-/_]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
+    -f $($(which find) "$CAL_DIR" -type f -name '*.ics*') |
+    grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
         >>"$EXT_TEXT_FILE"
 
 cat >"$DEPLOY_DIR/index.html" <<EOF
@@ -358,5 +380,11 @@ $(cat "$EXT_TEXT_FILE")
 </body>
 </html>
 EOF
+
+# Install wrangler if needed
+if ! command -v wrangler &>/dev/null; then
+    echo "wrangler not found, installing..." >&2
+    npm install -g wrangler
+fi
 
 wrangler pages deploy "$DEPLOY_DIR" --project-name="$PROJECT_NAME"
