@@ -13,12 +13,19 @@ TEXT_FILE='free.txt'
 EXT_TEXT_FILE='ext.txt'
 DEPLOY_DIR='deploy'
 CAL_DIR='cal'
-DATE=$(date -Iseconds -u | sed -E 's/\+00:00/Z/')
+# Format: upd 17 Dec @  2:00 PM
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    DATE=$(TZ='America/New_York' date '+upd %e %b @ %l:%M %p')
+else
+    # Linux
+    DATE=$(TZ='America/New_York' date '+upd %e %b @ %l:%M %p')
+fi
 echo "$DATE"
 
-echo -e "last updated $DATE\n" >"$TEXT_FILE"
+echo -e "$DATE\n" >"$TEXT_FILE"
 
-echo -e "last updated $DATE\n" >"$EXT_TEXT_FILE"
+echo -e "$DATE\n" >"$EXT_TEXT_FILE"
 
 if ! grep -q "^EXT_DIR=" .env; then
     echo "EXT_DIR=$(LC_ALL=C base64 </dev/urandom | tr -d '/+=' | head -c 32)" >>.env
