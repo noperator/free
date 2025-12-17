@@ -258,11 +258,8 @@ cat >"$DEPLOY_DIR/index.html" <<'EOF'
 
         document.addEventListener('DOMContentLoaded', function() {
             // Determine initial timezone
-            let initialTz = getTimezoneFromUrl();
-            if (!initialTz) {
-                initialTz = detectTimezone();
-                updateUrl(initialTz);
-            }
+            // Only use URL param if present, otherwise auto-detect (but don't set URL)
+            let initialTz = getTimezoneFromUrl() || detectTimezone();
 
             // Load content
             loadTimezone(initialTz);
@@ -609,17 +606,21 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
             }
 
             // Determine initial timezone
-            let initialTz = getTimezoneFromUrl();
-            if (!initialTz) {
-                initialTz = detectTimezone();
-            }
+            // Only use URL param if present, otherwise auto-detect (but don't set URL)
+            const urlTz = getTimezoneFromUrl();
+            let initialTz = urlTz || detectTimezone();
 
             // Load filters from URL
             loadFiltersFromUrl();
 
+            // Track if URL had params - only update URL if it did
+            const hadUrlParams = window.location.search.length > 0;
+
             // Load content (this will also apply filters)
             loadTimezone(initialTz).then(() => {
-                updateUrlParams();
+                if (hadUrlParams) {
+                    updateUrlParams();
+                }
             });
 
             // Add event listeners to filter checkboxes

@@ -41,16 +41,6 @@ CAL_URLS=(
 )
 ```
 
-#### GitHub Actions
-
-To deploy automatically via GitHub Actions, add these secrets to your repository:
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
-- `PROJECT_NAME`
-- `CAL_URLS` (one URL per line)
-
-Uncomment the cron schedule in `.github/workflows/deploy-calendar.yml` to enable daily deployment.
-
 ### Usage
 
 ```
