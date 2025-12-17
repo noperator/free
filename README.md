@@ -115,9 +115,9 @@ Fri  7 Feb @  1:00 PM –  5:00 PM EST (4h)
 ### To-do
 
 - [ ] document getting calendar links for Outlook, Google
-- [ ] dynamically determine default timezone (vs. hardcoding ET)
+- [x] dynamically determine default timezone (vs. hardcoding ET)
 - [x] min duration as cli opt
 - [x] min buffer as cli opt
-- [ ] in web ui, allow specifying local timezone
+- [x] in web ui, allow specifying local timezone
 - [x] lookahead as cli opt
 - [ ] containerize
