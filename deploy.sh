@@ -11,7 +11,6 @@ cd "$(dirname "$0")"
 
 DEPLOY_DIR='deploy'
 CAL_DIR='cal'
-TXT_DIR='txt'
 
 if ! grep -q "^EXT_DIR=" .env; then
     echo "EXT_DIR=$(LC_ALL=C base64 </dev/urandom | tr -d '/+=' | head -c 32)" >>.env
@@ -41,13 +40,11 @@ mkdir -p "$DEPLOY_DIR/$EXT_DIR"
 mkdir -p "$DEPLOY_DIR/tz"
 mkdir -p "$DEPLOY_DIR/$EXT_DIR/tz"
 mkdir -p "$CAL_DIR"
-mkdir -p "$TXT_DIR"
 rm "$DEPLOY_DIR"/*.html 2>/dev/null
 rm "$DEPLOY_DIR/tz"/* 2>/dev/null
 rm "$DEPLOY_DIR/$EXT_DIR"/*.html 2>/dev/null
 rm "$DEPLOY_DIR/$EXT_DIR/tz"/* 2>/dev/null
 rm "$CAL_DIR"/* 2>/dev/null
-rm "$TXT_DIR"/* 2>/dev/null
 
 # Handle calendar downloads for both local and GitHub Actions
 if [[ -n "$GITHUB_ACTIONS" ]]; then
@@ -76,7 +73,8 @@ fi
 
 # Export variables for parallel
 export CAL_FILES=$($(which find) "$CAL_DIR" -type f -name '*.ics*' | tr '\n' ' ')
-export TXT_DIR
+export DEPLOY_DIR
+export EXT_DIR
 export YESTERDAY
 
 # Function to generate a single timezone file (called by parallel)
@@ -95,8 +93,8 @@ generate_tz_file() {
             -t "$tz_name" \
             -f $CAL_FILES | \
             grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)' \
-            > "$TXT_DIR/${tz_abbr}.txt"
-        echo -e "$tz_date\n\n$(cat $TXT_DIR/${tz_abbr}.txt)" > "$TXT_DIR/${tz_abbr}.txt"
+            > "$DEPLOY_DIR/tz/${tz_abbr}.txt"
+        echo -e "$tz_date\n\n$(cat $DEPLOY_DIR/tz/${tz_abbr}.txt)" > "$DEPLOY_DIR/tz/${tz_abbr}.txt"
     else
         echo "Generating ext-$tz_abbr ($tz_name)..." >&2
         python3 main.py \
@@ -106,8 +104,8 @@ generate_tz_file() {
             -t "$tz_name" \
             -f $CAL_FILES | \
             grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
-            > "$TXT_DIR/ext-${tz_abbr}.txt"
-        echo -e "$tz_date\n\n$(cat $TXT_DIR/ext-${tz_abbr}.txt)" > "$TXT_DIR/ext-${tz_abbr}.txt"
+            > "$DEPLOY_DIR/$EXT_DIR/tz/${tz_abbr}.txt"
+        echo -e "$tz_date\n\n$(cat $DEPLOY_DIR/$EXT_DIR/tz/${tz_abbr}.txt)" > "$DEPLOY_DIR/$EXT_DIR/tz/${tz_abbr}.txt"
     fi
 }
 export -f generate_tz_file
@@ -118,12 +116,6 @@ parallel -j0 generate_tz_file {1} {2} {3} \
     :::  et              ct              mt              pt               akt               hst              gmt            cet           ist          jst        aet              utc \
     :::+ America/New_York America/Chicago America/Denver America/Los_Angeles America/Anchorage Pacific/Honolulu Europe/London Europe/Paris Asia/Kolkata Asia/Tokyo Australia/Sydney UTC \
     ::: regular extended
-
-# Copy timezone files to deploy directories
-for tz_abbr in "${!TIMEZONES[@]}"; do
-    cp "$TXT_DIR/${tz_abbr}.txt" "$DEPLOY_DIR/tz/"
-    cp "$TXT_DIR/ext-${tz_abbr}.txt" "$DEPLOY_DIR/$EXT_DIR/tz/${tz_abbr}.txt"
-done
 
 cat >"$DEPLOY_DIR/index.html" <<'EOF'
 <!DOCTYPE html>
