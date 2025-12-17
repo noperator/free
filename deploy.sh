@@ -86,7 +86,7 @@ generate_tz_file() {
     local mode="$3"  # "regular" or "extended"
 
     # Generate timestamp in this specific timezone
-    local tz_date=$(TZ="$tz_name" date '+upd %e %b @ %l:%M %p')
+    local tz_date=$(TZ="$tz_name" date '+cao %e %b @ %l:%M %p')
 
     if [[ "$mode" == "regular" ]]; then
         echo "Generating $tz_abbr ($tz_name)..." >&2
