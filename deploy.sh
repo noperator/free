@@ -9,10 +9,10 @@ fi
 
 cd "$(dirname "$0")"
 
-TEXT_FILE='free.txt'
-EXT_TEXT_FILE='ext.txt'
 DEPLOY_DIR='deploy'
 CAL_DIR='cal'
+TXT_DIR='txt'
+
 # Format: upd 17 Dec @  2:00 PM
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
@@ -23,10 +23,6 @@ else
 fi
 echo "$DATE"
 
-echo -e "$DATE\n" >"$TEXT_FILE"
-
-echo -e "$DATE\n" >"$EXT_TEXT_FILE"
-
 if ! grep -q "^EXT_DIR=" .env; then
     echo "EXT_DIR=$(LC_ALL=C base64 </dev/urandom | tr -d '/+=' | head -c 32)" >>.env
     echo "Generated new random EXT_DIR: $EXT_DIR"
@@ -34,12 +30,34 @@ fi
 
 source .env
 
+# Timezone mapping: abbreviation -> IANA timezone
+declare -A TIMEZONES=(
+    ["et"]="America/New_York"
+    ["ct"]="America/Chicago"
+    ["mt"]="America/Denver"
+    ["pt"]="America/Los_Angeles"
+    ["akt"]="America/Anchorage"
+    ["hst"]="Pacific/Honolulu"
+    ["gmt"]="Europe/London"
+    ["cet"]="Europe/Paris"
+    ["ist"]="Asia/Kolkata"
+    ["jst"]="Asia/Tokyo"
+    ["aet"]="Australia/Sydney"
+    ["utc"]="UTC"
+)
+
 mkdir -p "$DEPLOY_DIR"
 mkdir -p "$DEPLOY_DIR/$EXT_DIR"
+mkdir -p "$DEPLOY_DIR/tz"
+mkdir -p "$DEPLOY_DIR/$EXT_DIR/tz"
 mkdir -p "$CAL_DIR"
-rm "$DEPLOY_DIR"/* 2>/dev/null
-rm "$DEPLOY_DIR/$EXT_DIR"/* 2>/dev/null
+mkdir -p "$TXT_DIR"
+rm "$DEPLOY_DIR"/*.html 2>/dev/null
+rm "$DEPLOY_DIR/tz"/* 2>/dev/null
+rm "$DEPLOY_DIR/$EXT_DIR"/*.html 2>/dev/null
+rm "$DEPLOY_DIR/$EXT_DIR/tz"/* 2>/dev/null
 rm "$CAL_DIR"/* 2>/dev/null
+rm "$TXT_DIR"/* 2>/dev/null
 
 # Handle calendar downloads for both local and GitHub Actions
 if [[ -n "$GITHUB_ACTIONS" ]]; then
@@ -66,21 +84,47 @@ else
     YESTERDAY=$($(which date) -d 'yesterday' -Idate)
 fi
 
-python3 main.py \
-    -s "$YESTERDAY" \
-    -f $($(which find) "$CAL_DIR" -type f -name '*.ics*') |
-    grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)' \
-        >>"$TEXT_FILE"
+# Generate regular free time files for each timezone
+for tz_abbr in "${!TIMEZONES[@]}"; do
+    tz_name="${TIMEZONES[$tz_abbr]}"
+    echo "Generating free time for $tz_abbr ($tz_name)..."
 
-python3 main.py \
-    -s "$YESTERDAY" \
-    -w \
-    --days 91 \
-    -f $($(which find) "$CAL_DIR" -type f -name '*.ics*') |
-    grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
-        >>"$EXT_TEXT_FILE"
+    python3 main.py \
+        -s "$YESTERDAY" \
+        -t "$tz_name" \
+        -f $($(which find) "$CAL_DIR" -type f -name '*.ics*') | \
+        grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)' \
+        > "$TXT_DIR/${tz_abbr}.txt"
 
-cat >"$DEPLOY_DIR/index.html" <<EOF
+    # Prepend timestamp
+    echo -e "$DATE\n$(cat $TXT_DIR/${tz_abbr}.txt)" > "$TXT_DIR/${tz_abbr}.txt"
+done
+
+# Generate extended free time files for each timezone
+for tz_abbr in "${!TIMEZONES[@]}"; do
+    tz_name="${TIMEZONES[$tz_abbr]}"
+    echo "Generating extended free time for $tz_abbr ($tz_name)..."
+
+    python3 main.py \
+        -s "$YESTERDAY" \
+        -w \
+        --days 91 \
+        -t "$tz_name" \
+        -f $($(which find) "$CAL_DIR" -type f -name '*.ics*') | \
+        grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
+        > "$TXT_DIR/ext-${tz_abbr}.txt"
+
+    # Prepend timestamp
+    echo -e "$DATE\n$(cat $TXT_DIR/ext-${tz_abbr}.txt)" > "$TXT_DIR/ext-${tz_abbr}.txt"
+done
+
+# Copy timezone files to deploy directories
+for tz_abbr in "${!TIMEZONES[@]}"; do
+    cp "$TXT_DIR/${tz_abbr}.txt" "$DEPLOY_DIR/tz/"
+    cp "$TXT_DIR/ext-${tz_abbr}.txt" "$DEPLOY_DIR/$EXT_DIR/tz/${tz_abbr}.txt"
+done
+
+cat >"$DEPLOY_DIR/index.html" <<'EOF'
 <!DOCTYPE html>
 <html>
 <head>
@@ -98,17 +142,135 @@ cat >"$DEPLOY_DIR/index.html" <<EOF
             padding: 20px;
             margin: 0;
         }
+        .tz-container {
+            font-family: monospace;
+            margin-bottom: 10px;
+        }
+        .tz-container select {
+            font-family: monospace;
+            font-size: 14px;
+            padding: 2px 5px;
+        }
     </style>
 </head>
 <body>
-    <pre>
-$(cat "$TEXT_FILE")
-    </pre>
+    <div class="tz-container">
+        <label for="tz-select">tz:</label>
+        <select id="tz-select">
+            <option value="et">ET</option>
+            <option value="ct">CT</option>
+            <option value="mt">MT</option>
+            <option value="pt">PT</option>
+            <option value="akt">AKT</option>
+            <option value="hst">HST</option>
+            <option value="gmt">GMT</option>
+            <option value="cet">CET</option>
+            <option value="ist">IST</option>
+            <option value="jst">JST</option>
+            <option value="aet">AET</option>
+            <option value="utc">UTC</option>
+        </select>
+    </div>
+    <pre id="content">Loading...</pre>
+
+    <script>
+        const timezoneMap = {
+            'America/New_York': 'et',
+            'America/Detroit': 'et',
+            'America/Indiana/Indianapolis': 'et',
+            'America/Chicago': 'ct',
+            'America/Denver': 'mt',
+            'America/Phoenix': 'mt',
+            'America/Los_Angeles': 'pt',
+            'America/Anchorage': 'akt',
+            'Pacific/Honolulu': 'hst',
+            'Europe/London': 'gmt',
+            'Europe/Paris': 'cet',
+            'Europe/Berlin': 'cet',
+            'Europe/Rome': 'cet',
+            'Europe/Madrid': 'cet',
+            'Asia/Kolkata': 'ist',
+            'Asia/Calcutta': 'ist',
+            'Asia/Tokyo': 'jst',
+            'Australia/Sydney': 'aet',
+            'Australia/Melbourne': 'aet',
+            'UTC': 'utc',
+            'Etc/UTC': 'utc'
+        };
+
+        const validTimezones = ['et', 'ct', 'mt', 'pt', 'akt', 'hst', 'gmt', 'cet', 'ist', 'jst', 'aet', 'utc'];
+
+        function detectTimezone() {
+            try {
+                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                return timezoneMap[tz] || 'et';
+            } catch (e) {
+                return 'et';
+            }
+        }
+
+        function getTimezoneFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const tz = params.get('tz');
+            if (tz && validTimezones.includes(tz.toLowerCase())) {
+                return tz.toLowerCase();
+            }
+            return null;
+        }
+
+        function updateUrl(tz) {
+            const params = new URLSearchParams(window.location.search);
+            params.set('tz', tz);
+            const newUrl = window.location.pathname + '?' + params.toString();
+            window.history.pushState({}, '', newUrl);
+        }
+
+        async function loadTimezone(tz) {
+            const content = document.getElementById('content');
+            try {
+                const response = await fetch('tz/' + tz + '.txt');
+                if (!response.ok) throw new Error('Failed to load');
+                const text = await response.text();
+                content.textContent = text;
+            } catch (e) {
+                content.textContent = 'Error loading timezone data';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const select = document.getElementById('tz-select');
+
+            // Determine initial timezone
+            let initialTz = getTimezoneFromUrl();
+            if (!initialTz) {
+                initialTz = detectTimezone();
+                updateUrl(initialTz);
+            }
+
+            // Set dropdown and load content
+            select.value = initialTz;
+            loadTimezone(initialTz);
+
+            // Handle dropdown change
+            select.addEventListener('change', function() {
+                const tz = this.value;
+                updateUrl(tz);
+                loadTimezone(tz);
+            });
+
+            // Handle browser back/forward
+            window.addEventListener('popstate', function() {
+                const tz = getTimezoneFromUrl() || detectTimezone();
+                select.value = tz;
+                loadTimezone(tz);
+            });
+        });
+    </script>
 </body>
 </html>
 EOF
 
-cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
+cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
 <!DOCTYPE html>
 <html>
 <head>
@@ -116,7 +278,7 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>free (extended)</title>
     <style>
-        pre, .filter-container {
+        pre, .filter-container, .tz-container {
             font-family: monospace;
             white-space: pre-wrap;
         }
@@ -127,6 +289,14 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
             background: #f5f5f5;
             padding: 20px;
             margin: 0;
+        }
+        .tz-container {
+            margin-bottom: 10px;
+        }
+        .tz-container select {
+            font-family: monospace;
+            font-size: 14px;
+            padding: 2px 5px;
         }
         .filter-container {
             margin-bottom: 5px;
@@ -178,6 +348,23 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
     </style>
 </head>
 <body>
+    <div class="tz-container">
+        <label for="tz-select">tz:</label>
+        <select id="tz-select">
+            <option value="et">ET</option>
+            <option value="ct">CT</option>
+            <option value="mt">MT</option>
+            <option value="pt">PT</option>
+            <option value="akt">AKT</option>
+            <option value="hst">HST</option>
+            <option value="gmt">GMT</option>
+            <option value="cet">CET</option>
+            <option value="ist">IST</option>
+            <option value="jst">JST</option>
+            <option value="aet">AET</option>
+            <option value="utc">UTC</option>
+        </select>
+    </div>
     <div class="filter-container">
         <div class="filter-row">
             <div class="filter-option">
@@ -207,72 +394,128 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<EOF
             <button id="clear-filters" class="clear-button">clear</button>
         </div>
     </div>
-    <pre id="content">
-$(cat "$EXT_TEXT_FILE")
-    </pre>
+    <pre id="content">Loading...</pre>
 
     <script>
+        const timezoneMap = {
+            'America/New_York': 'et',
+            'America/Detroit': 'et',
+            'America/Indiana/Indianapolis': 'et',
+            'America/Chicago': 'ct',
+            'America/Denver': 'mt',
+            'America/Phoenix': 'mt',
+            'America/Los_Angeles': 'pt',
+            'America/Anchorage': 'akt',
+            'Pacific/Honolulu': 'hst',
+            'Europe/London': 'gmt',
+            'Europe/Paris': 'cet',
+            'Europe/Berlin': 'cet',
+            'Europe/Rome': 'cet',
+            'Europe/Madrid': 'cet',
+            'Asia/Kolkata': 'ist',
+            'Asia/Calcutta': 'ist',
+            'Asia/Tokyo': 'jst',
+            'Australia/Sydney': 'aet',
+            'Australia/Melbourne': 'aet',
+            'UTC': 'utc',
+            'Etc/UTC': 'utc'
+        };
+
+        const validTimezones = ['et', 'ct', 'mt', 'pt', 'akt', 'hst', 'gmt', 'cet', 'ist', 'jst', 'aet', 'utc'];
+
+        function detectTimezone() {
+            try {
+                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                return timezoneMap[tz] || 'et';
+            } catch (e) {
+                return 'et';
+            }
+        }
+
+        function getTimezoneFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const tz = params.get('tz');
+            if (tz && validTimezones.includes(tz.toLowerCase())) {
+                return tz.toLowerCase();
+            }
+            return null;
+        }
+
+        // Store original content for filtering
+        let originalContent = '';
+
+        async function loadTimezone(tz) {
+            const content = document.getElementById('content');
+            try {
+                const response = await fetch('tz/' + tz + '.txt');
+                if (!response.ok) throw new Error('Failed to load');
+                const text = await response.text();
+                originalContent = text;
+                applyFilters(false);
+            } catch (e) {
+                content.textContent = 'Error loading timezone data';
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
-            // Get filter checkboxes
+            const tzSelect = document.getElementById('tz-select');
             const wkndFilter = document.getElementById('filter-wknd');
             const wkdayFilter = document.getElementById('filter-wkday');
             const mornFilter = document.getElementById('filter-morn');
             const evenFilter = document.getElementById('filter-even');
             const daytimeFilter = document.getElementById('filter-daytime');
             const clearButton = document.getElementById('clear-filters');
-            
-            // Get content element
             const content = document.getElementById('content');
-            
-            // Store original content
-            const originalContent = content.innerHTML;
-            
-            // Process the content initially to remove filter keywords
-            function processInitialContent() {
-                const lines = originalContent.split('\n');
-                const processedLines = [];
-                
-                for (let i = 0; i < lines.length; i++) {
-                    let line = lines[i];
-                    
-                    // Remove filter keywords from the line
-                    line = line.replace(/\s+(wknd|morn|even)(\s+(morn|even))?/g, '');
-                    
-                    processedLines.push(line);
+
+            function updateUrlParams() {
+                const params = new URLSearchParams();
+
+                // Always include timezone
+                params.set('tz', tzSelect.value);
+
+                // Build time of day parameter
+                const todFilters = [];
+                if (mornFilter.checked) todFilters.push('morn');
+                if (daytimeFilter.checked) todFilters.push('dytm');
+                if (evenFilter.checked) todFilters.push('even');
+
+                // Build day of week parameter
+                const dowFilters = [];
+                if (wkdayFilter.checked) dowFilters.push('wkdy');
+                if (wkndFilter.checked) dowFilters.push('wknd');
+
+                // Only add parameters if they're not all selected (default state)
+                if (todFilters.length > 0 && todFilters.length < 3) {
+                    params.set('tod', todFilters.join(','));
                 }
-                
-                return processedLines.join('\n');
+
+                if (dowFilters.length > 0 && dowFilters.length < 2) {
+                    params.set('dow', dowFilters.join(','));
+                }
+
+                const newUrl = window.location.pathname + '?' + params.toString();
+                window.history.pushState({}, '', newUrl);
             }
-            
-            // Store processed content (without filter keywords)
-            const processedContent = processInitialContent();
-            content.innerHTML = processedContent;
-            
-            // Function to apply filters
+
             function applyFilters(updateUrl = true) {
-                // Get original content with filter keywords for filtering
                 const lines = originalContent.split('\n');
                 const filteredLines = [];
-                
-                // Process each line
+
                 for (let i = 0; i < lines.length; i++) {
                     const line = lines[i];
                     let processedLine = line.replace(/\s+(wknd|morn|even)(\s+(morn|even))?/g, '');
-                    
-                    // Skip empty lines
+
                     if (line.trim() === '') {
                         filteredLines.push(processedLine);
                         continue;
                     }
-                    
-                    // Check if line has any filter keywords
+
                     const hasWknd = line.includes('wknd');
-                    const hasWkday = !hasWknd; // If not weekend, it's a weekday
+                    const hasWkday = !hasWknd;
                     const hasMorn = line.includes('morn');
                     const hasEven = line.includes('even');
-                    const hasDaytime = !hasMorn && !hasEven; // If not morning and not evening, it's daytime
-                    
-                    // Skip lines that don't match the current filters
+                    const hasDaytime = !hasMorn && !hasEven;
+
                     if ((hasWknd && !wkndFilter.checked) ||
                         (hasWkday && !wkdayFilter.checked) ||
                         (hasMorn && !mornFilter.checked) ||
@@ -280,84 +523,44 @@ $(cat "$EXT_TEXT_FILE")
                         (hasDaytime && !daytimeFilter.checked)) {
                         continue;
                     }
-                    
+
                     filteredLines.push(processedLine);
                 }
-                
-                // Collapse multiple consecutive newlines into a single newline
+
                 let result = filteredLines.join('\n');
-                result = result.replace(/\n\s*\n\s*\n+/g, '\n\n'); // Replace 3+ newlines with 2
-                result = result.replace(/^\s*\n+/g, ''); // Remove leading newlines
-                
-                // Update content
-                content.innerHTML = result;
-                
-                // Update URL if requested
+                result = result.replace(/\n\s*\n\s*\n+/g, '\n\n');
+                result = result.replace(/^\s*\n+/g, '');
+
+                content.textContent = result;
+
                 if (updateUrl) {
                     updateUrlParams();
                 }
             }
-            
-            // Function to update URL parameters based on filter state
-            function updateUrlParams() {
-                const params = new URLSearchParams();
-                
-                // Build time of day parameter
-                const todFilters = [];
-                if (mornFilter.checked) todFilters.push('morn');
-                if (daytimeFilter.checked) todFilters.push('dytm');
-                if (evenFilter.checked) todFilters.push('even');
-                
-                // Build day of week parameter
-                const dowFilters = [];
-                if (wkdayFilter.checked) dowFilters.push('wkdy');
-                if (wkndFilter.checked) dowFilters.push('wknd');
-                
-                // Only add parameters if they're not all selected (default state)
-                if (todFilters.length > 0 && todFilters.length < 3) {
-                    params.set('tod', todFilters.join(','));
-                }
-                
-                if (dowFilters.length > 0 && dowFilters.length < 2) {
-                    params.set('dow', dowFilters.join(','));
-                }
-                
-                // Update URL without reloading page
-                const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
-                window.history.pushState({}, '', newUrl);
-            }
-            
-            // Function to read URL parameters and set filter state
+
             function loadFiltersFromUrl() {
                 const params = new URLSearchParams(window.location.search);
-                
-                // Default to all checked
+
                 wkndFilter.checked = true;
                 wkdayFilter.checked = true;
                 mornFilter.checked = true;
                 evenFilter.checked = true;
                 daytimeFilter.checked = true;
-                
-                // Process time of day filters
+
                 if (params.has('tod')) {
                     const todFilters = params.get('tod').split(',');
                     mornFilter.checked = todFilters.includes('morn');
                     daytimeFilter.checked = todFilters.includes('dytm');
                     evenFilter.checked = todFilters.includes('even');
                 }
-                
-                // Process day of week filters
+
                 if (params.has('dow')) {
                     const dowFilters = params.get('dow').split(',');
                     wkdayFilter.checked = dowFilters.includes('wkdy');
                     wkndFilter.checked = dowFilters.includes('wknd');
                 }
-                
-                // Apply filters without updating URL (to avoid loop)
-                applyFilters(false);
             }
-            
-            // Function to clear all filters
+
             function clearFilters() {
                 wkndFilter.checked = false;
                 wkdayFilter.checked = false;
@@ -366,22 +569,43 @@ $(cat "$EXT_TEXT_FILE")
                 daytimeFilter.checked = false;
                 applyFilters();
             }
-            
-            // Add event listeners to checkboxes
+
+            // Determine initial timezone
+            let initialTz = getTimezoneFromUrl();
+            if (!initialTz) {
+                initialTz = detectTimezone();
+            }
+
+            // Set dropdown and load filters from URL
+            tzSelect.value = initialTz;
+            loadFiltersFromUrl();
+
+            // Load content (this will also apply filters)
+            loadTimezone(initialTz).then(() => {
+                updateUrlParams();
+            });
+
+            // Handle timezone dropdown change
+            tzSelect.addEventListener('change', function() {
+                loadTimezone(this.value);
+                updateUrlParams();
+            });
+
+            // Add event listeners to filter checkboxes
             wkndFilter.addEventListener('change', applyFilters);
             wkdayFilter.addEventListener('change', applyFilters);
             mornFilter.addEventListener('change', applyFilters);
             evenFilter.addEventListener('change', applyFilters);
             daytimeFilter.addEventListener('change', applyFilters);
             clearButton.addEventListener('click', clearFilters);
-            
-            // Handle back/forward browser navigation
+
+            // Handle browser back/forward
             window.addEventListener('popstate', function() {
+                const tz = getTimezoneFromUrl() || detectTimezone();
+                tzSelect.value = tz;
                 loadFiltersFromUrl();
+                loadTimezone(tz);
             });
-            
-            // Initial load of filters from URL
-            loadFiltersFromUrl();
         });
     </script>
 </body>
