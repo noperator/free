@@ -161,7 +161,7 @@ cat >"$DEPLOY_DIR/index.html" <<'EOF'
 </head>
 <body>
     <pre id="header"></pre>
-    <pre id="content">Loading...</pre>
+    <pre id="content"></pre>
 
     <script>
         const timezoneMap = {
@@ -191,18 +191,18 @@ cat >"$DEPLOY_DIR/index.html" <<'EOF'
         const validTimezones = ['et', 'ct', 'mt', 'pt', 'akt', 'hst', 'gmt', 'cet', 'ist', 'jst', 'aet', 'utc'];
 
         const dropdownHtml = '<select id="tz-select">' +
+            '<option value="aet">AET</option>' +
+            '<option value="jst">JST</option>' +
+            '<option value="ist">IST</option>' +
+            '<option value="cet">CET</option>' +
+            '<option value="gmt">GMT</option>' +
+            '<option value="utc">UTC</option>' +
             '<option value="et">ET</option>' +
             '<option value="ct">CT</option>' +
             '<option value="mt">MT</option>' +
             '<option value="pt">PT</option>' +
             '<option value="akt">AKT</option>' +
             '<option value="hst">HST</option>' +
-            '<option value="gmt">GMT</option>' +
-            '<option value="cet">CET</option>' +
-            '<option value="ist">IST</option>' +
-            '<option value="jst">JST</option>' +
-            '<option value="aet">AET</option>' +
-            '<option value="utc">UTC</option>' +
             '</select>';
 
         function detectTimezone() {
@@ -397,7 +397,7 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
             <button id="clear-filters" class="clear-button">clear</button>
         </div>
     </div>
-    <pre id="content">Loading...</pre>
+    <pre id="content"></pre>
 
     <script>
         const timezoneMap = {
@@ -427,18 +427,18 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
         const validTimezones = ['et', 'ct', 'mt', 'pt', 'akt', 'hst', 'gmt', 'cet', 'ist', 'jst', 'aet', 'utc'];
 
         const dropdownHtml = '<select id="tz-select">' +
+            '<option value="aet">AET</option>' +
+            '<option value="jst">JST</option>' +
+            '<option value="ist">IST</option>' +
+            '<option value="cet">CET</option>' +
+            '<option value="gmt">GMT</option>' +
+            '<option value="utc">UTC</option>' +
             '<option value="et">ET</option>' +
             '<option value="ct">CT</option>' +
             '<option value="mt">MT</option>' +
             '<option value="pt">PT</option>' +
             '<option value="akt">AKT</option>' +
             '<option value="hst">HST</option>' +
-            '<option value="gmt">GMT</option>' +
-            '<option value="cet">CET</option>' +
-            '<option value="ist">IST</option>' +
-            '<option value="jst">JST</option>' +
-            '<option value="aet">AET</option>' +
-            '<option value="utc">UTC</option>' +
             '</select>';
 
         function detectTimezone() {
