@@ -1,4 +1,3 @@
-*.txt
 .DS_Store
 .env
 cal/
