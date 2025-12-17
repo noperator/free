@@ -517,9 +517,19 @@ def find_free_windows(events: List[Tuple[datetime, datetime, str]],
     filtered_windows = [(start, end, is_extended) for start, end, is_extended in result 
                        if end - start >= min_duration_td]
 
-    # Round start times up to next 15-minute boundary
+    # Filter past windows and round start times up to next 15-minute boundary
     final_result = []
+    current_time = datetime.now(et_tz)
+
     for start, end, is_extended in filtered_windows:
+        # Skip windows that have completely passed
+        if end <= current_time:
+            continue
+
+        # Adjust start time for windows that have already started
+        if start < current_time:
+            start = current_time
+
         # Round up start time to next 15-minute boundary
         minutes = start.minute
         rounded_minutes = ((minutes + 14) // 15) * 15  # Rounds up to next 15
