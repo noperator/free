@@ -282,6 +282,61 @@ def get_us_holidays(start_date: datetime, end_date: datetime) -> List[Tuple[date
 
     return holidays_list
 
+def parse_busy_file(file_path: str) -> List[Tuple[datetime, datetime, str]]:
+    """Parse busy.txt file and return list of (start, end, status) tuples in ET.
+
+    Supports two formats:
+    - Full-day busy: YYYY-MM-DD
+    - Time-specific busy: YYYY-MM-DD HHMM-HHMM (24-hour format)
+
+    Skips empty lines and lines starting with #.
+    Returns empty list if file doesn't exist.
+    """
+    et_tz = ZoneInfo("America/New_York")
+    events = []
+
+    try:
+        with open(file_path, 'r') as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        return events
+
+    for line_num, line in enumerate(lines, 1):
+        line = line.strip()
+
+        # Skip empty lines and comments
+        if not line or line.startswith('#'):
+            continue
+
+        try:
+            # Check if it's a time-specific entry (has a space after the date)
+            if ' ' in line:
+                # Format: YYYY-MM-DD HHMM-HHMM
+                date_part, time_part = line.split(' ', 1)
+                date = datetime.strptime(date_part, '%Y-%m-%d').date()
+
+                # Parse time range
+                start_time_str, end_time_str = time_part.split('-')
+                start_hour = int(start_time_str[:2])
+                start_min = int(start_time_str[2:])
+                end_hour = int(end_time_str[:2])
+                end_min = int(end_time_str[2:])
+
+                start = datetime.combine(date, time(start_hour, start_min), tzinfo=et_tz)
+                end = datetime.combine(date, time(end_hour, end_min), tzinfo=et_tz)
+            else:
+                # Format: YYYY-MM-DD (full day)
+                date = datetime.strptime(line, '%Y-%m-%d').date()
+                start = datetime.combine(date, time(0, 0), tzinfo=et_tz)
+                end = datetime.combine(date + timedelta(days=1), time(0, 0), tzinfo=et_tz)
+
+            events.append((start, end, 'BUSY'))
+        except (ValueError, IndexError) as e:
+            print(f"Warning: Skipping malformed line {line_num} in {file_path}: {line}", file=sys.stderr)
+            continue
+
+    return events
+
 def find_free_windows(events: List[Tuple[datetime, datetime, str]], 
                      buffer_mins: int = 30,
                      start_date: datetime = None,
@@ -710,6 +765,12 @@ def main():
                 ical_data = fetch_ical_from_url(url)
                 events = parse_calendar(ical_data, verbose=args.verbose, start_date=start_date, days=args.days)
                 all_events.extend(events)
+
+        # Add busy times from busy.txt if it exists
+        busy_events = parse_busy_file('busy.txt')
+        if busy_events:
+            print(f"reading busy.txt ({len(busy_events)} entries)", file=sys.stderr)
+            all_events.extend(busy_events)
 
         free_times = format_windows(
             find_free_windows(
