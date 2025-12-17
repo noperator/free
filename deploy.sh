@@ -13,16 +13,6 @@ DEPLOY_DIR='deploy'
 CAL_DIR='cal'
 TXT_DIR='txt'
 
-# Format: upd 17 Dec @  2:00 PM
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    DATE=$(TZ='America/New_York' date '+upd %e %b @ %l:%M %p')
-else
-    # Linux
-    DATE=$(TZ='America/New_York' date '+upd %e %b @ %l:%M %p')
-fi
-echo "$DATE"
-
 if ! grep -q "^EXT_DIR=" .env; then
     echo "EXT_DIR=$(LC_ALL=C base64 </dev/urandom | tr -d '/+=' | head -c 32)" >>.env
     echo "Generated new random EXT_DIR: $EXT_DIR"
@@ -84,39 +74,50 @@ else
     YESTERDAY=$($(which date) -d 'yesterday' -Idate)
 fi
 
-# Generate regular free time files for each timezone
-for tz_abbr in "${!TIMEZONES[@]}"; do
-    tz_name="${TIMEZONES[$tz_abbr]}"
-    echo "Generating free time for $tz_abbr ($tz_name)..."
+# Export variables for parallel
+export CAL_FILES=$($(which find) "$CAL_DIR" -type f -name '*.ics*' | tr '\n' ' ')
+export TXT_DIR
+export YESTERDAY
 
-    python3 main.py \
-        -s "$YESTERDAY" \
-        -t "$tz_name" \
-        -f $($(which find) "$CAL_DIR" -type f -name '*.ics*') | \
-        grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)' \
-        > "$TXT_DIR/${tz_abbr}.txt"
+# Function to generate a single timezone file (called by parallel)
+generate_tz_file() {
+    local tz_abbr="$1"
+    local tz_name="$2"
+    local mode="$3"  # "regular" or "extended"
 
-    # Prepend timestamp
-    echo -e "$DATE\n$(cat $TXT_DIR/${tz_abbr}.txt)" > "$TXT_DIR/${tz_abbr}.txt"
-done
+    # Generate timestamp in this specific timezone
+    local tz_date=$(TZ="$tz_name" date '+upd %e %b @ %l:%M %p')
 
-# Generate extended free time files for each timezone
-for tz_abbr in "${!TIMEZONES[@]}"; do
-    tz_name="${TIMEZONES[$tz_abbr]}"
-    echo "Generating extended free time for $tz_abbr ($tz_name)..."
+    if [[ "$mode" == "regular" ]]; then
+        echo "Generating $tz_abbr ($tz_name)..." >&2
+        python3 main.py \
+            -s "$YESTERDAY" \
+            -t "$tz_name" \
+            -f $CAL_FILES | \
+            grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)' \
+            > "$TXT_DIR/${tz_abbr}.txt"
+        echo -e "$tz_date\n\n$(cat $TXT_DIR/${tz_abbr}.txt)" > "$TXT_DIR/${tz_abbr}.txt"
+    else
+        echo "Generating ext-$tz_abbr ($tz_name)..." >&2
+        python3 main.py \
+            -s "$YESTERDAY" \
+            -w \
+            --days 91 \
+            -t "$tz_name" \
+            -f $CAL_FILES | \
+            grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
+            > "$TXT_DIR/ext-${tz_abbr}.txt"
+        echo -e "$tz_date\n\n$(cat $TXT_DIR/ext-${tz_abbr}.txt)" > "$TXT_DIR/ext-${tz_abbr}.txt"
+    fi
+}
+export -f generate_tz_file
 
-    python3 main.py \
-        -s "$YESTERDAY" \
-        -w \
-        --days 91 \
-        -t "$tz_name" \
-        -f $($(which find) "$CAL_DIR" -type f -name '*.ics*') | \
-        grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
-        > "$TXT_DIR/ext-${tz_abbr}.txt"
-
-    # Prepend timestamp
-    echo -e "$DATE\n$(cat $TXT_DIR/ext-${tz_abbr}.txt)" > "$TXT_DIR/ext-${tz_abbr}.txt"
-done
+# Generate all timezone files in parallel
+# :::+ links abbr with tz_name (1-to-1), ::: creates product with mode
+parallel -j0 generate_tz_file {1} {2} {3} \
+    :::  et              ct              mt              pt               akt               hst              gmt            cet           ist          jst        aet              utc \
+    :::+ America/New_York America/Chicago America/Denver America/Los_Angeles America/Anchorage Pacific/Honolulu Europe/London Europe/Paris Asia/Kolkata Asia/Tokyo Australia/Sydney UTC \
+    ::: regular extended
 
 # Copy timezone files to deploy directories
 for tz_abbr in "${!TIMEZONES[@]}"; do
@@ -142,35 +143,24 @@ cat >"$DEPLOY_DIR/index.html" <<'EOF'
             padding: 20px;
             margin: 0;
         }
-        .tz-container {
-            font-family: monospace;
-            margin-bottom: 10px;
+        #header {
+            margin-bottom: 0;
         }
-        .tz-container select {
+        #content {
+            margin-top: 0;
+        }
+        #tz-select {
             font-family: monospace;
-            font-size: 14px;
-            padding: 2px 5px;
+            font-size: inherit;
+            padding: 0;
+            border: 1px solid #999;
+            background: white;
+            margin-left: -5px;
         }
     </style>
 </head>
 <body>
-    <div class="tz-container">
-        <label for="tz-select">tz:</label>
-        <select id="tz-select">
-            <option value="et">ET</option>
-            <option value="ct">CT</option>
-            <option value="mt">MT</option>
-            <option value="pt">PT</option>
-            <option value="akt">AKT</option>
-            <option value="hst">HST</option>
-            <option value="gmt">GMT</option>
-            <option value="cet">CET</option>
-            <option value="ist">IST</option>
-            <option value="jst">JST</option>
-            <option value="aet">AET</option>
-            <option value="utc">UTC</option>
-        </select>
-    </div>
+    <pre id="header"></pre>
     <pre id="content">Loading...</pre>
 
     <script>
@@ -200,6 +190,21 @@ cat >"$DEPLOY_DIR/index.html" <<'EOF'
 
         const validTimezones = ['et', 'ct', 'mt', 'pt', 'akt', 'hst', 'gmt', 'cet', 'ist', 'jst', 'aet', 'utc'];
 
+        const dropdownHtml = '<select id="tz-select">' +
+            '<option value="et">ET</option>' +
+            '<option value="ct">CT</option>' +
+            '<option value="mt">MT</option>' +
+            '<option value="pt">PT</option>' +
+            '<option value="akt">AKT</option>' +
+            '<option value="hst">HST</option>' +
+            '<option value="gmt">GMT</option>' +
+            '<option value="cet">CET</option>' +
+            '<option value="ist">IST</option>' +
+            '<option value="jst">JST</option>' +
+            '<option value="aet">AET</option>' +
+            '<option value="utc">UTC</option>' +
+            '</select>';
+
         function detectTimezone() {
             try {
                 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -225,21 +230,41 @@ cat >"$DEPLOY_DIR/index.html" <<'EOF'
             window.history.pushState({}, '', newUrl);
         }
 
+        let currentTz = 'et';
+
         async function loadTimezone(tz) {
+            const header = document.getElementById('header');
             const content = document.getElementById('content');
+            currentTz = tz;
             try {
                 const response = await fetch('tz/' + tz + '.txt');
                 if (!response.ok) throw new Error('Failed to load');
                 const text = await response.text();
-                content.textContent = text;
+
+                // Split into lines
+                const lines = text.split('\n');
+                const firstLine = lines[0] || '';
+                const restOfContent = lines.slice(1).join('\n');
+
+                // Create header with inline dropdown, padded to align with timezone column
+                // Pad to ~33 chars to align with timezone in content lines
+                const paddedLine = firstLine.padEnd(33, ' ');
+                header.innerHTML = paddedLine + dropdownHtml;
+                content.textContent = restOfContent;
+
+                // Set dropdown value and attach event listener
+                const select = document.getElementById('tz-select');
+                select.value = tz;
+                select.addEventListener('change', function() {
+                    updateUrl(this.value);
+                    loadTimezone(this.value);
+                });
             } catch (e) {
                 content.textContent = 'Error loading timezone data';
             }
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            const select = document.getElementById('tz-select');
-
             // Determine initial timezone
             let initialTz = getTimezoneFromUrl();
             if (!initialTz) {
@@ -247,21 +272,12 @@ cat >"$DEPLOY_DIR/index.html" <<'EOF'
                 updateUrl(initialTz);
             }
 
-            // Set dropdown and load content
-            select.value = initialTz;
+            // Load content
             loadTimezone(initialTz);
-
-            // Handle dropdown change
-            select.addEventListener('change', function() {
-                const tz = this.value;
-                updateUrl(tz);
-                loadTimezone(tz);
-            });
 
             // Handle browser back/forward
             window.addEventListener('popstate', function() {
                 const tz = getTimezoneFromUrl() || detectTimezone();
-                select.value = tz;
                 loadTimezone(tz);
             });
         });
@@ -278,7 +294,7 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>free (extended)</title>
     <style>
-        pre, .filter-container, .tz-container {
+        pre, .filter-container {
             font-family: monospace;
             white-space: pre-wrap;
         }
@@ -290,13 +306,16 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
             padding: 20px;
             margin: 0;
         }
-        .tz-container {
-            margin-bottom: 10px;
+        #header {
+            margin-bottom: 0;
         }
-        .tz-container select {
+        #tz-select {
             font-family: monospace;
-            font-size: 14px;
-            padding: 2px 5px;
+            font-size: inherit;
+            padding: 0;
+            border: 1px solid #999;
+            background: white;
+            margin-left: -5px;
         }
         .filter-container {
             margin-bottom: 5px;
@@ -331,7 +350,7 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
             margin-top: 0;
         }
         #content {
-            margin-top: 3px;
+            margin-top: 0;
         }
         @media (max-width: 768px) {
             .filter-container {
@@ -348,23 +367,7 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
     </style>
 </head>
 <body>
-    <div class="tz-container">
-        <label for="tz-select">tz:</label>
-        <select id="tz-select">
-            <option value="et">ET</option>
-            <option value="ct">CT</option>
-            <option value="mt">MT</option>
-            <option value="pt">PT</option>
-            <option value="akt">AKT</option>
-            <option value="hst">HST</option>
-            <option value="gmt">GMT</option>
-            <option value="cet">CET</option>
-            <option value="ist">IST</option>
-            <option value="jst">JST</option>
-            <option value="aet">AET</option>
-            <option value="utc">UTC</option>
-        </select>
-    </div>
+    <pre id="header"></pre>
     <div class="filter-container">
         <div class="filter-row">
             <div class="filter-option">
@@ -423,6 +426,21 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
 
         const validTimezones = ['et', 'ct', 'mt', 'pt', 'akt', 'hst', 'gmt', 'cet', 'ist', 'jst', 'aet', 'utc'];
 
+        const dropdownHtml = '<select id="tz-select">' +
+            '<option value="et">ET</option>' +
+            '<option value="ct">CT</option>' +
+            '<option value="mt">MT</option>' +
+            '<option value="pt">PT</option>' +
+            '<option value="akt">AKT</option>' +
+            '<option value="hst">HST</option>' +
+            '<option value="gmt">GMT</option>' +
+            '<option value="cet">CET</option>' +
+            '<option value="ist">IST</option>' +
+            '<option value="jst">JST</option>' +
+            '<option value="aet">AET</option>' +
+            '<option value="utc">UTC</option>' +
+            '</select>';
+
         function detectTimezone() {
             try {
                 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -441,16 +459,39 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
             return null;
         }
 
-        // Store original content for filtering
+        // Store original content for filtering (without header line)
         let originalContent = '';
+        let headerLine = '';
+        let currentTz = 'et';
 
         async function loadTimezone(tz) {
+            const header = document.getElementById('header');
             const content = document.getElementById('content');
+            currentTz = tz;
             try {
                 const response = await fetch('tz/' + tz + '.txt');
                 if (!response.ok) throw new Error('Failed to load');
                 const text = await response.text();
-                originalContent = text;
+
+                // Split into lines - first line is header, rest is content
+                const lines = text.split('\n');
+                headerLine = lines[0] || '';
+                originalContent = lines.slice(1).join('\n');
+
+                // Create header with inline dropdown, padded to align with timezone column
+                // Pad to ~33 chars to align with timezone in content lines
+                const paddedLine = headerLine.padEnd(33, ' ');
+                header.innerHTML = paddedLine + dropdownHtml;
+
+                // Set dropdown value and attach event listener
+                const select = document.getElementById('tz-select');
+                select.value = tz;
+                select.addEventListener('change', function() {
+                    updateUrlParams();
+                    loadTimezone(this.value);
+                });
+
+                // Apply filters to content
                 applyFilters(false);
             } catch (e) {
                 content.textContent = 'Error loading timezone data';
@@ -458,7 +499,6 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            const tzSelect = document.getElementById('tz-select');
             const wkndFilter = document.getElementById('filter-wknd');
             const wkdayFilter = document.getElementById('filter-wkday');
             const mornFilter = document.getElementById('filter-morn');
@@ -471,7 +511,7 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
                 const params = new URLSearchParams();
 
                 // Always include timezone
-                params.set('tz', tzSelect.value);
+                params.set('tz', currentTz);
 
                 // Build time of day parameter
                 const todFilters = [];
@@ -496,6 +536,9 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
                 const newUrl = window.location.pathname + '?' + params.toString();
                 window.history.pushState({}, '', newUrl);
             }
+
+            // Make updateUrlParams available globally
+            window.updateUrlParams = updateUrlParams;
 
             function applyFilters(updateUrl = true) {
                 const lines = originalContent.split('\n');
@@ -538,6 +581,9 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
                 }
             }
 
+            // Make applyFilters available globally
+            window.applyFilters = applyFilters;
+
             function loadFiltersFromUrl() {
                 const params = new URLSearchParams(window.location.search);
 
@@ -576,18 +622,11 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
                 initialTz = detectTimezone();
             }
 
-            // Set dropdown and load filters from URL
-            tzSelect.value = initialTz;
+            // Load filters from URL
             loadFiltersFromUrl();
 
             // Load content (this will also apply filters)
             loadTimezone(initialTz).then(() => {
-                updateUrlParams();
-            });
-
-            // Handle timezone dropdown change
-            tzSelect.addEventListener('change', function() {
-                loadTimezone(this.value);
                 updateUrlParams();
             });
 
@@ -602,7 +641,6 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
             // Handle browser back/forward
             window.addEventListener('popstate', function() {
                 const tz = getTimezoneFromUrl() || detectTimezone();
-                tzSelect.value = tz;
                 loadFiltersFromUrl();
                 loadTimezone(tz);
             });
