@@ -18,7 +18,7 @@ git clone https://github.com/noperator/free
 
 ### Configure
 
-Install dependencies.
+If not using Docker, install dependencies.
 
 ```
 python3 -m venv venv
@@ -42,6 +42,14 @@ CAL_URLS=(
 ```
 
 ### Usage
+
+Simplest way to deploy:
+
+```
+𝄢 docker compose up -d
+```
+
+If you want to run manually:
 
 ```
 𝄢 python3 main.py -h
@@ -110,4 +118,4 @@ Fri  7 Feb @  1:00 PM –  5:00 PM EST (4h)
 - [x] min buffer as cli opt
 - [x] in web ui, allow specifying local timezone
 - [x] lookahead as cli opt
-- [ ] containerize
+- [x] containerize
