@@ -1,0 +1,9 @@
+services:
+  free:
+    build: .
+    env_file: .env
+    volumes:
+      - ./deploy:/app/deploy
+      - ./cal:/app/cal
+      - ./busy.txt:/app/busy.txt:ro
+    restart: unless-stopped

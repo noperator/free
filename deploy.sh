@@ -50,17 +50,16 @@ rm "$CAL_DIR"/* 2>/dev/null
 if [[ -n "$GITHUB_ACTIONS" ]]; then
     # In GitHub Actions, CAL_URLS comes from the secret as a multi-line string
     IFS=$'\n' read -d '' -ra CALENDAR_URLS <<<"$CAL_URLS"
-    for CAL_URL in "${CALENDAR_URLS[@]}"; do
-        # Remove any surrounding quotes if present
-        CAL_URL=$(echo "$CAL_URL" | sed -e "s/^['\"]//;s/['\"]$//")
-        wget -P "$CAL_DIR" "$CAL_URL"
-    done
 else
-    # Local environment - CAL_URLS is an array from .env
-    for CAL_URL in "${CAL_URLS[@]}"; do
-        wget -P "$CAL_DIR" "$CAL_URL"
-    done
+    # Local/Docker environment - CAL_URLS is space-separated
+    IFS=' ' read -ra CALENDAR_URLS <<<"$CAL_URLS"
 fi
+
+for CAL_URL in "${CALENDAR_URLS[@]}"; do
+    # Remove any surrounding quotes if present
+    CAL_URL=$(echo "$CAL_URL" | sed -e "s/^['\"]//;s/['\"]$//")
+    wget -P "$CAL_DIR" "$CAL_URL"
+done
 
 source venv/bin/activate
 
@@ -112,7 +111,7 @@ export -f generate_tz_file
 
 # Generate all timezone files in parallel
 # :::+ links abbr with tz_name (1-to-1), ::: creates product with mode
-parallel -j0 generate_tz_file {1} {2} {3} \
+parallel -j "$JOBS" generate_tz_file {1} {2} {3} \
     :::  et              ct              mt              pt               akt               hst              gmt            cet           ist          jst        aet              utc \
     :::+ America/New_York America/Chicago America/Denver America/Los_Angeles America/Anchorage Pacific/Honolulu Europe/London Europe/Paris Asia/Kolkata Asia/Tokyo Australia/Sydney UTC \
     ::: regular extended
