@@ -111,7 +111,7 @@ export -f generate_tz_file
 
 # Generate all timezone files in parallel
 # :::+ links abbr with tz_name (1-to-1), ::: creates product with mode
-parallel -j "$JOBS" generate_tz_file {1} {2} {3} \
+parallel -j "${JOBS:-$(nproc)}" generate_tz_file {1} {2} {3} \
     :::  et              ct              mt              pt               akt               hst              gmt            cet           ist          jst        aet              utc \
     :::+ America/New_York America/Chicago America/Denver America/Los_Angeles America/Anchorage Pacific/Honolulu Europe/London Europe/Paris Asia/Kolkata Asia/Tokyo Australia/Sydney UTC \
     ::: regular extended
