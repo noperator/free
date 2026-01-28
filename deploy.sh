@@ -83,7 +83,7 @@ generate_tz_file() {
     local mode="$3"  # "regular" or "extended"
 
     # Generate timestamp in this specific timezone
-    local tz_date=$(TZ="$tz_name" date '+cao %e %b @ %l:%M %p')
+    local tz_date=$(TZ="$tz_name" date '+CAO %e %b @ %l:%M %p')
 
     if [[ "$mode" == "regular" ]]; then
         echo "Generating $tz_abbr ($tz_name)..." >&2
@@ -93,7 +93,7 @@ generate_tz_file() {
             -f $CAL_FILES | \
             grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)' \
             > "$DEPLOY_DIR/tz/${tz_abbr}.txt"
-        echo -e "$tz_date\n\n$(cat $DEPLOY_DIR/tz/${tz_abbr}.txt)" > "$DEPLOY_DIR/tz/${tz_abbr}.txt"
+        echo -e "email me: $CONTACT_EMAIL\n\n$tz_date\n\n$(cat $DEPLOY_DIR/tz/${tz_abbr}.txt)" > "$DEPLOY_DIR/tz/${tz_abbr}.txt"
     else
         echo "Generating ext-$tz_abbr ($tz_name)..." >&2
         python3 main.py \
@@ -104,7 +104,7 @@ generate_tz_file() {
             -f $CAL_FILES | \
             grep -E '^$|^[A-Za-z]{3} {1,2}[0-9]{1,2} [A-Za-z]{3} @ {1,2}[0-9:]{4,5} [AP]M – {1,2}[0-9:]{4,5} [AP]M [A-Za-z0-9+/_-]{2,32} \(([0-9]{1,2}h)?([0-9]{1,2}m)?\)( {1,4}(morn|even|wknd( (morn|even))?))?' \
             > "$DEPLOY_DIR/$EXT_DIR/tz/${tz_abbr}.txt"
-        echo -e "$tz_date\n\n$(cat $DEPLOY_DIR/$EXT_DIR/tz/${tz_abbr}.txt)" > "$DEPLOY_DIR/$EXT_DIR/tz/${tz_abbr}.txt"
+        echo -e "email me: $CONTACT_EMAIL\n\n$tz_date\n\n$(cat $DEPLOY_DIR/$EXT_DIR/tz/${tz_abbr}.txt)" > "$DEPLOY_DIR/$EXT_DIR/tz/${tz_abbr}.txt"
     fi
 }
 export -f generate_tz_file
@@ -232,15 +232,16 @@ cat >"$DEPLOY_DIR/index.html" <<'EOF'
                 if (!response.ok) throw new Error('Failed to load');
                 const text = await response.text();
 
-                // Split into lines
+                // Split into lines - line 0 is contact, line 1 is blank, line 2 is timestamp header
                 const lines = text.split('\n');
-                const firstLine = lines[0] || '';
-                const restOfContent = lines.slice(1).join('\n');
+                const contactLine = lines[0] || '';
+                const timestampLine = lines[2] || '';
+                const restOfContent = lines.slice(3).join('\n');
 
-                // Create header with inline dropdown, padded to align with timezone column
-                // Pad to ~33 chars to align with timezone in content lines
-                const paddedLine = firstLine.padEnd(33, ' ');
-                header.innerHTML = paddedLine + dropdownHtml;
+                // Create header with contact line, timestamp with inline dropdown
+                // Pad timestamp to ~33 chars to align with timezone in content lines
+                const paddedTimestamp = timestampLine.padEnd(33, ' ');
+                header.innerHTML = contactLine + '\n\n' + paddedTimestamp + dropdownHtml;
                 content.textContent = restOfContent;
 
                 // Set dropdown value and attach event listener
@@ -461,15 +462,16 @@ cat >"$DEPLOY_DIR/$EXT_DIR/index.html" <<'EOF'
                 if (!response.ok) throw new Error('Failed to load');
                 const text = await response.text();
 
-                // Split into lines - first line is header, rest is content
+                // Split into lines - line 0 is contact, line 1 is blank, line 2 is timestamp header
                 const lines = text.split('\n');
-                headerLine = lines[0] || '';
-                originalContent = lines.slice(1).join('\n');
+                const contactLine = lines[0] || '';
+                headerLine = lines[2] || '';
+                originalContent = lines.slice(3).join('\n');
 
-                // Create header with inline dropdown, padded to align with timezone column
-                // Pad to ~33 chars to align with timezone in content lines
-                const paddedLine = headerLine.padEnd(33, ' ');
-                header.innerHTML = paddedLine + dropdownHtml;
+                // Create header with contact line, timestamp with inline dropdown
+                // Pad timestamp to ~33 chars to align with timezone in content lines
+                const paddedTimestamp = headerLine.padEnd(33, ' ');
+                header.innerHTML = contactLine + '\n\n' + paddedTimestamp + dropdownHtml;
 
                 // Set dropdown value and attach event listener
                 const select = document.getElementById('tz-select');
